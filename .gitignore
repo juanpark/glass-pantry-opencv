@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+models/*.onnx
+out/
+# Personal photos never go in git (Juan's kitchen). Pass them by path.
+private/
+*.jpg
+*.jpeg
+*.heic
+*.png
+!web/samples/*.png
+.env*
+CLAUDE.md

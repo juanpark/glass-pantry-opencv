@@ -1,0 +1,15 @@
+[project]
+name = "glass-pantry-verifier"
+version = "0.1.0"
+description = "OpenCV 5 checks a vision model's reading of a fridge shelf photo and decides: file, ask, or re-shoot."
+requires-python = "==3.12.*"
+dependencies = [
+    "opencv-contrib-python-headless==5.0.0.93",
+    "numpy==2.3.4",
+]
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
