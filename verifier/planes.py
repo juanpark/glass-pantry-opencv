@@ -10,6 +10,7 @@ height and moved 1 of 21 shelves onto a shelf rim instead of the surface. Classi
 report 4-15 lines that are not shelves, which is why this only checks proposals and never invents them.
 """
 
+import math
 from dataclasses import dataclass, asdict
 
 import cv2
@@ -60,6 +61,9 @@ def check(img: np.ndarray, proposed: list[float]) -> list[PlaneCheck]:
     prof = profile_of(img)
     out = []
     for y in proposed:
+        if not (math.isfinite(y) and 0.0 <= y <= 1.0):  # outside the photo: nothing here can confirm it
+            out.append(PlaneCheck(y, False, None, 0.0))
+            continue
         i0, i1 = max(0, int((y - WINDOW) / BIN)), min(len(prof), int((y + WINDOW) / BIN) + 1)
         win = prof[i0:i1]
         best = float(win.max()) if len(win) else 0.0

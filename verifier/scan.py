@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Protocol
 
+import cv2
 import numpy as np
 
 from . import decide, gate, planes
@@ -25,13 +26,22 @@ class Proposer(Protocol):
     def propose(self, jpeg: bytes) -> Proposal: ...
 
 
-def run(img: np.ndarray, jpeg: bytes, proposer: Proposer) -> dict:
-    """The whole loop for one photo. Returns the decision and every piece of evidence behind it."""
+def run(jpeg: bytes, proposer: Proposer) -> dict:
+    """The whole loop for one photo. Returns the decision and every piece of evidence behind it.
+
+    OpenCV checks the image decoded from `jpeg`, the same bytes the model is sent, so a check can never pass
+    a different photo from the one that is read.
+    """
     trace: list[dict] = []
     t0 = time.perf_counter()
 
     def step(name: str, **data):
         trace.append({"step": name, "ms": round((time.perf_counter() - t0) * 1000, 1), **data})
+
+    img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR) if jpeg else None
+    if img is None:
+        step("decide", action=decide.RETAKE, why=["photo:unreadable"])
+        return {"action": decide.RETAKE, "why": ["photo:unreadable"], "proposal": None, "trace": trace}
 
     g = gate.check(img)
     step("gate", **g.to_dict())

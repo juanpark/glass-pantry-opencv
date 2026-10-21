@@ -61,14 +61,15 @@ class _Fake:
 
 
 def test_scan_retake_spends_no_model_call():
+    # run() takes only the bytes the model would get, so the gate always checks that exact photo
     fake = _Fake([0.3, 0.6])
-    out = scan.run(shake(shelf()), b"", fake)
+    out = scan.run(_jpeg(shake(shelf())), fake)
     assert out["action"] == "retake" and fake.calls == 0
     assert [s["step"] for s in out["trace"]] == ["gate", "decide"]
 
 
 def test_scan_trace_shows_the_check_that_changed_the_action():
-    out = scan.run(shelf(shelves=(0.3, 0.6)), b"", _Fake([0.3, 0.45]))
+    out = scan.run(_jpeg(shelf(shelves=(0.3, 0.6))), _Fake([0.3, 0.45]))
     assert out["action"] == "ask"
     assert [s["step"] for s in out["trace"]] == ["gate", "propose", "planes", "decide"]
     unconfirmed = [c for c in out["trace"][2]["checks"] if not c["confirmed"]]
@@ -76,5 +77,23 @@ def test_scan_trace_shows_the_check_that_changed_the_action():
 
 
 def test_scan_files_when_everything_agrees():
-    out = scan.run(shelf(shelves=(0.3, 0.6)), b"", _Fake([0.3, 0.6]))
+    out = scan.run(_jpeg(shelf(shelves=(0.3, 0.6))), _Fake([0.3, 0.6]))
     assert out["action"] == "file" and out["proposal"]["items"] == [{"name": "jam"}]
+
+
+@pytest.mark.parametrize("y", [-0.05, 1.05, float("nan"), float("inf")])
+def test_a_shelf_outside_the_photo_is_never_confirmed(y):
+    (c,) = planes.check(shelf(shelves=(0.3, 0.6)), [y])
+    assert not c.confirmed and c.snapped_y is None, c
+
+
+def _jpeg(img):
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    assert ok
+    return buf.tobytes()
+
+
+def test_scan_refuses_bytes_that_are_not_an_image():
+    fake = _Fake([0.3, 0.6])
+    out = scan.run(b"not a jpeg", fake)
+    assert out["action"] == "retake" and out["why"] == ["photo:unreadable"] and fake.calls == 0
