@@ -76,5 +76,7 @@ def test_something_new_outside_the_old_boxes_is_not_called_no_change():
     old = rng_shelf()
     new, _ = reshoot(old)
     cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
-    r = change.compare(old, [{"id": "a", "box": [300, 420, 460, 640]}], new, change.align(old, new))
-    assert r["outcome"] != change.SAME  # at best "compared items unchanged", never a claim about the whole shelf
+    al = change.align(old, new)
+    assert al.ok
+    r = change.compare(old, [{"id": "a", "box": [300, 420, 460, 640]}], new, al)
+    assert r["outcome"] == change.OLD_ITEMS_SAME  # only the compared item is vouched for, never the whole shelf

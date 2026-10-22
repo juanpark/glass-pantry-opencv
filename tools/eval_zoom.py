@@ -30,7 +30,9 @@ def main(run: Path):
     if bad:
         sys.exit(f"invalid annotation values for {len(bad)} keys, e.g. {bad[:3]}")
     eligible = eligible_keys(run)
+    elig = set(eligible)
     missing = [k for k in eligible if k not in ann]
+    stale = sorted(k for k in ann if k.endswith("|label") and k not in elig)  # the tool would not offer these now
     rows, cost_off, cost_on, ms_off, ms_on, scans = [], 0.0, 0.0, [], [], 0
     for f in sorted(run.glob("*.json")):
         if f.name == "annotations.json":
@@ -50,7 +52,7 @@ def main(run: Path):
         for it in (r.get("proposal") or {}).get("items", []):
             o = obs.get((it.get("id"), "label"))
             key = f"{f.stem}|{it.get('id')}|label"
-            if key in ann:
+            if key in elig and key in ann:
                 rows.append({"truth": ann[key], "outcome": o["outcome"] if o else "not_re_read",
                              "scan_already_asked": bool(base_asks)})
     judged = [x for x in rows if x["truth"] != "unsure"]
@@ -60,6 +62,9 @@ def main(run: Path):
     print(f"scans {scans}")
     print(f"coverage: eligible labelled readings {len(eligible)}, annotated {len(eligible) - len(missing)}, "
           f"unannotated {len(missing)}, unsure {len(rows) - len(judged)}, scored {len(judged)}")
+    if stale:
+        print(f"ignored {len(stale)} label annotations that are not eligible readings of these runs (stale), e.g. {stale[:2]}")
+    assert len(judged) + (len(rows) - len(judged)) == len(eligible) - len(missing), "denominators disagree"
     if missing:
         print("PARTIAL: some readings are not annotated; this is not a complete result and decides nothing.")
     print(f"wrong first readings: {len(first_wrong)} of {len(judged)} scored")
