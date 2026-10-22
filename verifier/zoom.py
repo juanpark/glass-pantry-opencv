@@ -18,7 +18,8 @@ import cv2
 import numpy as np
 
 SMALL_BOX = 0.03  # box area / photo area below this: label text is small enough to be guessed
-BLURRY = 40.0  # Laplacian variance of the box (original pixels) below this: no detail left to read
+BLURRY = 60.0  # Laplacian variance of the box, measured at SHARP_LONG, below this: no detail left to read
+SHARP_LONG = 400  # boxes are reduced to this long side before measuring (24 MP originals are soft per pixel)
 EDGE = 2  # px from the photo edge that counts as touching it
 PAD = 0.35  # crop margin around the box, as a share of its larger side
 BUDGET = 4  # crop calls per scan, fixed before any test
@@ -66,6 +67,9 @@ def _sharpness(img, rect) -> float:
     if patch.size == 0:
         return 0.0
     g = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY) if patch.ndim == 3 else patch
+    s = min(1.0, SHARP_LONG / max(g.shape))
+    if s < 1.0:
+        g = cv2.resize(g, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
     return float(cv2.Laplacian(g, cv2.CV_64F).var())
 
 
