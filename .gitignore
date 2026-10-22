@@ -13,3 +13,15 @@ private/
 !web/samples/*.png
 .env*
 CLAUDE.md
+# Planning, agent notes and reviews live in the private notes repo, not here
+.agents/
+.claude/
+AGENTS.md
+# Tooling and machine files
+.DS_Store
+*.log
+.aws-sam/
+samconfig.toml
+.aws/
+*.pem
+*.key
