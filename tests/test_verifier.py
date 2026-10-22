@@ -57,7 +57,7 @@ class _Fake:
 
     def propose(self, jpeg):
         self.calls += 1
-        return scan.Proposal(shelf_lines=self.lines, items=[{"name": "jam"}], model="fake")
+        return scan.Proposal(shelf_lines=self.lines, items=[{"id": "i1", "name": "jam"}], model="fake")
 
 
 def test_scan_retake_spends_no_model_call():
@@ -78,7 +78,7 @@ def test_scan_trace_shows_the_check_that_changed_the_action():
 
 def test_scan_files_when_everything_agrees():
     out = scan.run(_jpeg(shelf(shelves=(0.3, 0.6))), _Fake([0.3, 0.6]))
-    assert out["action"] == "file" and out["proposal"]["items"] == [{"name": "jam"}]
+    assert out["action"] == "file" and out["proposal"]["items"] == [{"id": "i1", "name": "jam"}]
 
 
 @pytest.mark.parametrize("y", [-0.05, 1.05, float("nan"), float("inf")])

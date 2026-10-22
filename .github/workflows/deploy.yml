@@ -51,9 +51,11 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='Url'].OutputValue" --output text)
           echo "url=$URL"
           curl -fsS "${URL}health"
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: image/jpeg' --data-binary 'x' "${URL}scan")
-          echo "scan -> $code (503 when switched off, 400 when on: the body is not a photo)"
-          test "$code" = "503" -o "$code" = "400"
+          # Not a photo: 503 "paused" when switched off, 400 "bad_photo" when on. Neither reads nor counts anything.
+          body=$(curl -s -w '\n%{http_code}' -X POST -H 'content-type: image/jpeg' --data-binary 'x' "${URL}scan")
+          code=$(echo "$body" | tail -1); err=$(echo "$body" | head -1 | python3 -c 'import json,sys; print(json.load(sys.stdin).get("error"))')
+          echo "scan -> $code $err"
+          { [ "$code" = "503" ] && [ "$err" = "paused" ]; } || { [ "$code" = "400" ] && [ "$err" = "bad_photo" ]; }
       - name: The deploy role is refused outside its own resources
         run: |
           set +e

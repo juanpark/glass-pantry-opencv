@@ -137,6 +137,7 @@ const ACTION = {file:["Ready to file","Every check agrees. Confirm the list belo
   retake:["Take a new photo","The photo failed the quality check, so no model was called."]};
 
 let current = null;
+let gen = 0;  // each new photo or example bumps this; anything answering for an older one is ignored
 
 async function health(){
   try{
@@ -167,33 +168,46 @@ function shrink(file, long=3024){
   });
 }
 
-function setBusy(on, text){ $("#busy").hidden = !on; if(text) $("#busyText").textContent = text; $("#sample").disabled = on; }
+function setBusy(on, text){
+  $("#busy").hidden = !on; if(text) $("#busyText").textContent = text;
+  $("#sample").disabled = on; $("#pick").disabled = on || !$("#consent").checked;
+  $("#pickLabel").setAttribute("aria-disabled", String(on || !$("#consent").checked));
+}
+function clearResult(){  // nothing from the previous photo stays confirmable while a new one is read
+  current = null; $("#result").hidden = true; $("#listCard").hidden = true; $("#rows").innerHTML = ""; $("#saved").textContent = "";
+}
 
 $("#pick").addEventListener("change", async e => {
   const f = e.target.files[0]; if(!f) return;
-  $("#error").textContent = "";
+  const my = ++gen;
+  $("#error").textContent = ""; clearResult();
   setBusy(true, "Reading the photo, about 40 seconds…");
   try{
     const {blob, url} = await shrink(f);
     const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
     const body = await r.json();
+    if(my !== gen) return;
     if(!r.ok){ $("#error").textContent = body.message || ("The engine said: " + body.error); return; }
-    show(body, url);
-  }catch(err){ $("#error").textContent = "The photo could not be sent. Check the connection and try again."; }
-  finally{ setBusy(false); e.target.value = ""; }
+    show(body, url, my);
+  }catch(err){ if(my === gen) $("#error").textContent = "The photo could not be sent. Check the connection and try again."; }
+  finally{ if(my === gen) setBusy(false); e.target.value = ""; }
 });
 
 $("#sample").addEventListener("click", async () => {
-  $("#error").textContent = "";
+  const my = ++gen;
+  $("#error").textContent = ""; clearResult();
   try{
     const r = await fetch("sample");
+    if(my !== gen) return;
     if(!r.ok){ $("#error").textContent = "The recorded example is not published yet."; return; }
     const body = await r.json();
-    show(body, body.photo);
-  }catch{ $("#error").textContent = "The recorded example could not be loaded."; }
+    if(my !== gen) return;
+    show(body, body.photo, my);
+  }catch{ if(my === gen) $("#error").textContent = "The recorded example could not be loaded."; }
 });
 
-function show(res, photoUrl){
+function show(res, photoUrl, my){
+  if(my !== gen) return;
   current = res;
   $("#result").hidden = false;
   const m = $("#mode"); m.textContent = res.mode === "LIVE" ? "Live result" : "Recorded example";
@@ -203,7 +217,7 @@ function show(res, photoUrl){
   d.innerHTML = `<b></b><p class="muted"></p><ul></ul>`;
   d.querySelector("b").textContent = t; d.querySelector("p").textContent = sub;
   for(const w of res.why || []){ const li = document.createElement("li"); li.textContent = why(w); d.querySelector("ul").append(li); }
-  steps(res); draw(res, photoUrl); list(res);
+  steps(res); draw(res, photoUrl, my); list(res);
 }
 
 function steps(res){
@@ -230,11 +244,12 @@ function steps(res){
 
 function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
-function draw(res, url){
+function draw(res, url, my){
   const cv = $("#cv"), ctx = cv.getContext("2d");
   const fr = (res.trace || []).find(s => s.step === "frames");
   const img = new Image();
   img.onload = () => {
+    if(my !== gen) return;  // a newer photo has replaced this one
     cv.width = img.naturalWidth; cv.height = img.naturalHeight;
     ctx.drawImage(img, 0, 0);
     const k = fr ? img.naturalWidth / fr.size[0] : 1;  // canonical px -> displayed px
@@ -316,11 +331,12 @@ function list(res){
 
 $("#commit").addEventListener("click", () => {
   if(!current) return;
+  const src = current.proposal && current.proposal.source;
   const rows = [...document.querySelectorAll("#rows tr")].map(tr => ({
     id: tr.children[0].textContent, appearance: tr.children[1].textContent,
     label: tr.children[2].querySelector("input").value || null,
     count: tr.children[3].querySelector("input").value || null}));
-  try{ sessionStorage.setItem("confirmed", JSON.stringify({at: Date.now(), rows})); }catch{}
+  try{ sessionStorage.setItem("confirmed", JSON.stringify({at: Date.now(), source: src, mode: current.mode, rows})); }catch{}
   $("#saved").textContent = `Confirmed ${rows.length} items. Kept in this browser tab only; nothing is sent.`;
 });
 

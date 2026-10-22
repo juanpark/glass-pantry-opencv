@@ -136,9 +136,29 @@ def _norm(s):
     return "".join(str(s).split()).lower() if s is not None else None
 
 
-def reconcile(it: dict, fields, answer: dict | None, confirmed: dict, same_label=None) -> list[Observation]:
+def valid_answer(a, fields=("label", "quantity")) -> dict | None:
+    """The crop answer's protocol, checked for the fields that were asked. Anything else counts as a failed call."""
+    if not isinstance(a, dict):
+        return None
+    if "label" in fields and not isinstance(a.get("label_readable"), bool):
+        return None
+    if "quantity" in fields and not isinstance(a.get("count_complete"), bool):
+        return None
+    if "label_partial" in a and not isinstance(a["label_partial"], bool):
+        return None
+    lab = a.get("label")
+    if lab is not None and not (isinstance(lab, str) and lab.strip()):
+        return None
+    c = a.get("count")
+    if c is not None and (isinstance(c, bool) or not isinstance(c, int) or c < 0):
+        return None
+    return a
+
+
+def reconcile(it: dict, fields, answer: dict | None, confirmed: dict, same_label=None, note: str = "") -> list[Observation]:
     """One observation per field, by the C1 table. `answer` None = failed, refused or malformed call.
     `same_label(a, b)`: optional judge for two label strings that differ only in language, script or form."""
+    answer = valid_answer(answer, set(fields))
     out = []
     for f in sorted(fields):
         full = it.get(f)
@@ -176,7 +196,7 @@ def reconcile(it: dict, fields, answer: dict | None, confirmed: dict, same_label
             reopen = crop is not None and _norm(crop) != _norm(person)
             if reopen:
                 outcome = "conflict"
-        out.append(Observation(it["id"], f, full, crop, outcome, effective, reopen))
+        out.append(Observation(it["id"], f, full, crop, outcome, effective, reopen, note))
     return out
 
 
@@ -198,16 +218,26 @@ class Zoomer:
     """Runs the pass with any `asker` (a model call, a recording, or a fake):
     ask(crop_jpeg, fields, target) -> dict | None, where target = (crop_w, crop_h, x0, y0, x1, y1)."""
 
-    def __init__(self, asker, budget: int = BUDGET, judge=None):
-        self.asker, self.budget, self.judge = asker, budget, judge
+    MIN_SECONDS = 25.0  # a re-read is not started with less time than this left
 
-    def run(self, frames, items: list[dict], confirmed: dict | None = None) -> dict:
+    def __init__(self, asker, budget: int = BUDGET, judge=None, deadline: float | None = None, clock=None):
+        import time
+        self.asker, self.budget, self.judge, self.deadline = asker, budget, judge, deadline
+        self.clock = clock or time.monotonic
+
+    def run(self, frames, items: list[dict], confirmed: dict | None = None, binding: dict | None = None) -> dict:
+        """`items` must have unique ids (scan.run leaves out ambiguous ones). `binding` (source photo hash, proposal
+        id) is copied onto every observation, so a reading can never be applied to another photo or proposal."""
         confirmed = confirmed or {}
         plans, skipped = select(frames.image, frames.original, frames.scale, items, self.budget)
         by_id = {it.get("id"): it for it in items}
         observations, calls = [], []
+        same = self.judge.same if self.judge else None
         for p in plans:
             it = by_id[p.item_id]
+            if self.deadline is not None and self.deadline - self.clock() < self.MIN_SECONDS:
+                observations += reconcile(it, p.fields, None, confirmed, note="skipped:time")
+                continue
             try:
                 img, k = crop_image(frames.original, p.rect_original)
                 jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()
@@ -217,12 +247,13 @@ class Zoomer:
                 calls.append({"item_id": p.item_id, "error": str(e)[:60] or type(e).__name__})
             else:
                 calls.append({"item_id": p.item_id, "answer": answer})
-            observations += reconcile(it, p.fields, answer, confirmed, self.judge.same if self.judge else None)
-        for item_id, f, reason in skipped:
-            it = by_id.get(item_id, {})
-            observations.append(Observation(item_id, f, it.get(f), None, "unresolved", it.get(f), note=reason))
+            observations += reconcile(it, p.fields, answer, confirmed, same)
+        for item_id, f, reason in skipped:  # same path as a failed call, so a person's value still stands
+            observations += reconcile(by_id[item_id], {f}, None, confirmed, note=reason)
+        b = binding or {}
         return {
+            "binding": b,
             "plans": [{**asdict(p), "fields": sorted(p.fields)} for p in plans],
             "calls": calls,
-            "observations": [o.to_dict() for o in observations],
+            "observations": [{**o.to_dict(), **b} for o in observations],
         }

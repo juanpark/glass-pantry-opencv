@@ -92,10 +92,12 @@ def _photo(event) -> bytes | None:
     return raw
 
 
-def scan_photo(jpeg: bytes, key: str) -> dict:
+def scan_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
+    """At most 1 full read + 4 close-ups + 4 label judgements = 9 model calls per admitted scan, all inside the
+    request's time budget: no model request outlives the Lambda, and re-reads not started in time stay unresolved."""
     from verifier import claude, scan, zoom
-    asker, judge = claude.ClaudeAsker(key), claude.LabelJudge(key)
-    res = scan.run(jpeg, claude.ClaudeProposer(key), zoomer=zoom.Zoomer(asker, judge=judge))
+    asker, judge = claude.ClaudeAsker(key, deadline), claude.LabelJudge(key, deadline)
+    res = scan.run(jpeg, claude.ClaudeProposer(key, deadline), zoomer=zoom.Zoomer(asker, judge=judge, deadline=deadline))
     res["mode"] = "LIVE"
     res["model_calls"] = (1 if res["proposal"] else 0) + len(asker.log) + len(judge.log)
     res["cost_usd"] = round(sum(s.get("cost", 0) for s in res["trace"] if s["step"] == "propose")
@@ -127,6 +129,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         jpeg = _photo(event)
         if not jpeg or len(jpeg) > MAX_BYTES:
             return _resp(400, {"error": "bad_photo"})
+        from verifier.frames import decode
+        if decode(jpeg) is None:  # not a photo: refused before it uses any of today's allowance
+            return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
         try:
             ok = admitter()
         except Exception as e:  # the counter cannot be read: fail closed, never scan uncounted
@@ -135,8 +140,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         if not ok:
             _log(route="scan", result="daily_limit")
             return _resp(429, {"error": "daily_limit", "message": "Today's live scans are used up. Try the recorded sample."})
+        deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None
         try:
-            res = scanner(jpeg, key())
+            res = scanner(jpeg, key(), deadline=deadline)
         except Exception as e:  # never echo model text or photo data
             _log(route="scan", result="error", kind=type(e).__name__, ms=round((time.time() - t0) * 1000))
             return _resp(502, {"error": "model_unavailable"})

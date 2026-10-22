@@ -27,10 +27,20 @@ class ModelError(Exception):
     pass
 
 
-def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: int = 8192, effort: str | None = EFFORT) -> dict:
+RESERVE = 8.0  # seconds kept back to finish and return a reviewable result
+
+
+def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: int = 8192, effort: str | None = EFFORT,
+         deadline: float | None = None) -> dict:
+    """One request. `deadline` (time.monotonic() seconds) bounds the wait so a slow call cannot outlive the caller."""
     key = key or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise ModelError("no API key")
+    timeout = TIMEOUT
+    if deadline is not None:
+        timeout = min(TIMEOUT, deadline - time.monotonic() - RESERVE)
+        if timeout < 5:
+            raise ModelError("no_time")
     body = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": content}]}
     if effort:
         body["output_config"] = {"effort": effort}
@@ -38,7 +48,7 @@ def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: 
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             d = json.load(r)
             rid = r.headers.get("request-id")
     except urllib.error.HTTPError as e:  # one attempt only: a retry is a new, separately budgeted call
@@ -111,36 +121,54 @@ def split(elements: list, h: int) -> tuple[list[float], list[dict]]:
     return lines, items
 
 
+def check_items(items: list[dict]) -> list[str]:
+    """Problems that make a proposal ambiguous: an id that is missing, not text, or used twice. A box that is
+    not four finite, ordered numbers is not an error here (zoom simply cannot use it)."""
+    seen, bad = set(), []
+    for it in items:
+        i = it.get("id")
+        if not isinstance(i, str) or not i.strip():
+            bad.append("item_id_invalid")
+        elif i in seen:
+            bad.append(f"item_id_duplicate:{i}")
+        else:
+            seen.add(i)
+    return sorted(set(bad))
+
+
 class ClaudeProposer:
-    def __init__(self, key: str | None = None):
-        self.key, self.last_text = key, None  # last_text: for local review only, never logged
+    def __init__(self, key: str | None = None, deadline: float | None = None):
+        self.key, self.deadline, self.last_text = key, deadline, None  # last_text: local review only, never logged
 
     def propose(self, jpeg: bytes) -> Proposal:
         from .frames import decode
         img = decode(jpeg)
         h, w = img.shape[:2]
-        r = call([image_block(jpeg), {"type": "text", "text": prompt.contents(w, h)}], self.key)
+        r = call([image_block(jpeg), {"type": "text", "text": prompt.contents(w, h)}], self.key, deadline=self.deadline)
         self.last_text = r["text"]
         elements = parse_array(r["text"])
         lines, items = split(elements or [], h)
         raw = {k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")}
         raw["prompt"] = prompt.VERSION
         raw["parsed"] = elements is not None
+        raw["complete"] = r["stop"] == "end_turn"  # cut off (max_tokens) or refused: the list may be missing items
         return Proposal(shelf_lines=lines, items=items, model=MODEL, raw=raw)
 
 
 class ClaudeAsker:
     """The zoom pass's narrow re-read. Returns the parsed answer, or None for a refusal or malformed reply."""
 
-    def __init__(self, key: str | None = None):
-        self.key, self.log = key, []
+    def __init__(self, key: str | None = None, deadline: float | None = None):
+        self.key, self.deadline, self.log = key, deadline, []
 
     def ask(self, crop_jpeg: bytes, fields, target) -> dict | None:
         from .zoom import ASK_PROMPT
         cw, ch, x0, y0, x1, y1 = target
         text = ASK_PROMPT.format(cw=cw, ch=ch, x0=x0, y0=y0, x1=x1, y1=y1)
-        r = call([image_block(crop_jpeg), {"type": "text", "text": text}], self.key, max_tokens=400)
+        r = call([image_block(crop_jpeg), {"type": "text", "text": text}], self.key, max_tokens=400, deadline=self.deadline)
         self.log.append({k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")})
+        if r["stop"] != "end_turn":  # cut off or refused: whatever came back certifies nothing
+            return None
         return parse_object(r["text"])
 
 
@@ -157,15 +185,18 @@ class LabelJudge:
     """Text only, no image: are two label readings the same product (서울우유 / SEOUL MILK; 땅콩버터 / SKIPPY PEANUT BUTTER)?
     It can only turn a string mismatch into "same"; it never invents a label. Unsure or failed counts as different."""
 
-    def __init__(self, key: str | None = None):
-        self.key, self.log = key, []
+    def __init__(self, key: str | None = None, deadline: float | None = None):
+        self.key, self.deadline, self.log = key, deadline, []
 
     def same(self, a: str, b: str) -> bool:
         text = JUDGE_PROMPT.format(a=json.dumps(a, ensure_ascii=False), b=json.dumps(b, ensure_ascii=False))
         try:
-            r = call([{"type": "text", "text": text}], self.key, model=JUDGE, max_tokens=200, effort=None)
+            r = call([{"type": "text", "text": text}], self.key, model=JUDGE, max_tokens=200, effort=None,
+                     deadline=self.deadline)
         except ModelError:
             return False
         self.log.append({k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")} | {"model": JUDGE})
+        if r["stop"] != "end_turn":
+            return False
         v = parse_object(r["text"])
         return isinstance(v, dict) and v.get("same_product") is True
