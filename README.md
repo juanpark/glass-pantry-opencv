@@ -50,4 +50,4 @@ logs that hold codes and counts only.
 | `web/index.html` | the page: upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |
 
-Docs: [architecture](docs/architecture/), [where the code came from](docs/provenance.md).
+Docs: [architecture](docs/architecture/), [report (draft)](docs/report.md), [where the code came from](docs/provenance.md).
