@@ -169,7 +169,18 @@ def test_an_over_budget_skip_keeps_the_persons_value():
     assert over and all(o["effective"] == "mine" for o in over)
 
 
-def test_a_close_up_reading_more_of_the_same_label_is_same():
-    (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label="양념소스"), {"label"},
-                          {"label": "60계 Chicken Sauce 양념소스", "label_readable": True}, {})
-    assert o.outcome == "same"
+@pytest.mark.parametrize("full, crop", [("설탕", "무설탕"), ("salt", "unsalted"), ("regular", "not regular")])
+def test_a_longer_close_up_reading_is_never_same_by_containment_alone(full, crop):
+    asked = []
+    (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label=full), {"label"}, {"label": crop, "label_readable": True}, {},
+                          same_label=lambda a, b: asked.append((a, b)) or False)
+    assert o.outcome == "conflict" and asked == [(full, crop)]
+
+
+def test_a_negative_judgement_on_a_longer_reading_asks(monkeypatch):
+    fake_api(monkeypatch, [("end_turn", full_read([item("i1", SMALL, label="설탕")])),
+                           ("end_turn", '{"label":"무설탕","label_readable":true}'),
+                           ("end_turn", '{"same_product": false}')])
+    r = scan.run(jpeg(shelf()), claude.ClaudeProposer("k"),
+                 zoomer=zoom.Zoomer(claude.ClaudeAsker("k"), judge=claude.LabelJudge("k")))
+    assert r["action"] == decide.ASK and "label_conflict:i1" in r["why"]
