@@ -1,0 +1,69 @@
+name: test-and-deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run --frozen pytest -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    concurrency: deploy
+    env:
+      AWS_REGION: us-east-1
+      STACK: glass-pantry-opencv
+      REPO_URI: 155669502936.dkr.ecr.us-east-1.amazonaws.com/glass-pantry-opencv
+      BUCKET: glass-pantry-opencv-deploy-155669502936
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::155669502936:role/gh-deploy-glass-pantry-opencv
+          aws-region: us-east-1
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - name: Build
+        run: sam build
+      - name: Deploy (caller credentials, no service role, dedicated bucket and repository)
+        run: >
+          sam deploy --stack-name "$STACK" --region "$AWS_REGION"
+          --image-repository "$REPO_URI" --s3-bucket "$BUCKET"
+          --no-confirm-changeset --no-fail-on-empty-changeset
+          --parameter-overrides EngineSha=${{ github.sha }}
+      - name: Smoke test
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='Url'].OutputValue" --output text)
+          echo "url=$URL"
+          curl -fsS "${URL}health"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: image/jpeg' --data-binary 'x' "${URL}scan")
+          echo "scan -> $code (503 when switched off, 400 when on: the body is not a photo)"
+          test "$code" = "503" -o "$code" = "400"
+      - name: The deploy role is refused outside its own resources
+        run: |
+          set +e
+          for cmd in \
+            "aws ssm get-parameter --name /glass-pantry-opencv/anthropic-api-key --with-decryption" \
+            "aws lambda list-functions" \
+            "aws iam list-roles" \
+            "aws s3 ls" ; do
+            out=$($cmd 2>&1); rc=$?
+            if [ $rc -eq 0 ]; then echo "UNEXPECTED ALLOW: $cmd"; exit 1; fi
+            echo "$out" | grep -q -E "AccessDenied|not authorized" || { echo "unexpected error for: $cmd"; echo "$out" | head -2; exit 1; }
+            echo "denied as expected: $cmd"
+          done

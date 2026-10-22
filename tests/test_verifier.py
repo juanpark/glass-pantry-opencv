@@ -65,14 +65,14 @@ def test_scan_retake_spends_no_model_call():
     fake = _Fake([0.3, 0.6])
     out = scan.run(_jpeg(shake(shelf())), fake)
     assert out["action"] == "retake" and fake.calls == 0
-    assert [s["step"] for s in out["trace"]] == ["gate", "decide"]
+    assert [s["step"] for s in out["trace"]] == ["frames", "gate", "decide"]
 
 
 def test_scan_trace_shows_the_check_that_changed_the_action():
     out = scan.run(_jpeg(shelf(shelves=(0.3, 0.6))), _Fake([0.3, 0.45]))
     assert out["action"] == "ask"
-    assert [s["step"] for s in out["trace"]] == ["gate", "propose", "planes", "decide"]
-    unconfirmed = [c for c in out["trace"][2]["checks"] if not c["confirmed"]]
+    assert [s["step"] for s in out["trace"]] == ["frames", "gate", "propose", "planes", "decide"]
+    unconfirmed = [c for c in out["trace"][3]["checks"] if not c["confirmed"]]
     assert [c["proposed_y"] for c in unconfirmed] == [0.45]
 
 

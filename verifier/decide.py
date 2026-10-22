@@ -28,6 +28,11 @@ def after_gate(gate: GateResult) -> Decision | None:
     return None
 
 
-def after_checks(planes: list[PlaneCheck]) -> Decision:
+def after_checks(planes: list[PlaneCheck], zoom_observations: list[dict] = ()) -> Decision:
+    """Reasons only accumulate: an agreeing crop never clears an unconfirmed shelf, and a crop conflict asks
+    even when every shelf is confirmed. Unresolved crops are not a reason to ask; they keep the full-photo
+    reading, which is what a person reviews anyway."""
     why = [f"shelf_unconfirmed:{p.proposed_y:.3f}" for p in planes if not p.confirmed]
+    field = {"label": "label", "quantity": "count"}
+    why += [f"{field[o['field']]}_conflict:{o['item_id']}" for o in zoom_observations if o["outcome"] == "conflict"]
     return Decision(ASK, why) if why else Decision(FILE)

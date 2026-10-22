@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glass Pantry Shelf Check</title>
+<style>
+/* One column: notice → photo → what the engine did → the list a person confirms. */
+:root{
+  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c;
+  --ok:#2e8b57; --ask:#c77700; --bad:#c0392b; --info:#2f6fb3; --grey:#8a948e; --code:#eef1ee;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8;
+  --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
+  padding:24px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+main{max-width:980px;margin:0 auto;display:grid;gap:20px}
+h1{font-size:1.6rem;margin:0;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:0}
+p{margin:0;max-width:70ch}
+.muted{color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
+.live{color:var(--ok)} .rec{color:var(--info)} .off{color:var(--grey)}
+button,.btn{font:600 .92rem var(--sans);border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+button:focus-visible,.btn:focus-within,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{display:none}
+label.consent{display:flex;gap:8px;align-items:flex-start}
+.decision{border-left:6px solid var(--grey);padding:10px 14px;border-radius:6px;background:var(--code)}
+.decision.file{border-color:var(--ok)} .decision.ask{border-color:var(--ask)} .decision.retake{border-color:var(--bad)}
+.decision b{font-size:1.05rem}
+.stage{position:relative;width:100%;min-width:0}
+canvas{width:100%;height:auto;border-radius:6px;display:block;background:var(--code)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--muted)}
+.sw{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.step{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:.84rem;min-width:0}
+.step b{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td input{width:100%;min-width:90px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+td.q input{min-width:52px;width:64px}
+.tag{font:600 .7rem var(--sans);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.t-same{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.t-conflict{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.t-provisional{background:color-mix(in srgb,var(--ask) 20%,transparent);color:var(--ask)}
+.t-unresolved{background:color-mix(in srgb,var(--grey) 20%,transparent);color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.8rem}
+.spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header class="row" style="justify-content:space-between">
+    <div style="display:grid;gap:6px">
+      <h1>Glass Pantry Shelf Check</h1>
+      <p class="muted">Photograph one fridge or pantry shelf. A vision model lists what it sees; OpenCV checks the photo and the reading, re-reads small labels and counts up close, and decides whether to file the list, ask you, or ask for a new photo. You confirm before anything is kept.</p>
+    </div>
+    <span id="status" class="chip off">Checking…</span>
+  </header>
+
+  <section class="card">
+    <h2>Before you upload</h2>
+    <p>Your photo is sent to this engine on AWS and to Anthropic's Claude model to be read. This page does not store photos; the engine logs only counts and timings. Leave people, documents and anything personal out of the frame.</p>
+    <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send a photo.</span></label>
+    <div class="row">
+      <label class="btn primary" id="pickLabel" aria-disabled="true">Choose a shelf photo<input type="file" id="pick" accept="image/*" capture="environment" disabled></label>
+      <button id="sample" type="button">Show the recorded example</button>
+      <span id="busy" class="row muted" hidden><span class="spinner"></span><span id="busyText">Reading the photo, about 40 seconds…</span></span>
+    </div>
+    <p id="error" class="muted" role="status"></p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>What the engine did</h2>
+      <span id="mode" class="chip"></span>
+    </div>
+    <div id="decision" class="decision"></div>
+    <div class="stage"><canvas id="cv"></canvas></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--ok)"></span>shelf edge confirmed by OpenCV</span>
+      <span><span class="sw" style="background:var(--ask)"></span>shelf the photo does not show</span>
+      <span><span class="sw" style="background:#4aa3df"></span>item the model proposed</span>
+      <span><span class="sw" style="background:var(--bad)"></span>re-read disagrees</span>
+      <span><span class="sw" style="background:var(--ok);opacity:.6"></span>re-read agrees</span>
+      <span><span class="sw" style="background:var(--grey)"></span>re-read could not tell</span>
+    </div>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section class="card" id="listCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>The list, for you to confirm</h2>
+      <button class="primary" id="commit" type="button">Confirm this list</button>
+    </div>
+    <p class="muted" id="listNote">Edit anything that is wrong. Where the close-up re-read disagrees with the first reading, neither is applied: pick one or type your own.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>What it looks like</th><th>Label</th><th>Count</th><th>Close-up check</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <p class="muted" id="saved" role="status"></p>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const WHY = {
+  "photo:blurry": "The photo is out of focus.", "photo:shake": "The photo is smeared by movement.",
+  "photo:dark": "The photo is too dark to read labels.", "photo:blown": "Glare or overexposure hides part of the shelf.",
+  "photo:unreadable": "The file could not be opened as a photo."
+};
+function why(code){
+  if (WHY[code]) return WHY[code];
+  const [k, v] = code.split(":");
+  if (k === "shelf_unconfirmed") return `The model put a shelf at ${Math.round(v*100)}% of the height, and the photo shows no shelf edge there.`;
+  if (k === "label_conflict") return `The close-up label reading for ${v} differs from the first reading.`;
+  if (k === "count_conflict") return `The close-up count for ${v} differs from the first count.`;
+  return code;
+}
+const ACTION = {file:["Ready to file","Every check agrees. Confirm the list below."],
+  ask:["Please check","OpenCV found something the reading and the photo disagree on."],
+  retake:["Take a new photo","The photo failed the quality check, so no model was called."]};
+
+let current = null;
+
+async function health(){
+  try{
+    const r = await fetch("health"); const h = await r.json();
+    const s = $("#status");
+    s.textContent = h.live ? "Live scans on" : "Live scans paused";
+    s.className = "chip " + (h.live ? "live" : "off");
+  }catch{ $("#status").textContent = "Offline"; }
+}
+
+$("#consent").addEventListener("change", e => {
+  $("#pick").disabled = !e.target.checked;
+  $("#pickLabel").setAttribute("aria-disabled", String(!e.target.checked));
+});
+
+function shrink(file, long=3024){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth*s); c.height = Math.round(img.naturalHeight*s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => b ? res({blob:b, url:URL.createObjectURL(b)}) : rej(new Error("encode")), "image/jpeg", 0.9);
+    };
+    img.onerror = () => rej(new Error("decode"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function setBusy(on, text){ $("#busy").hidden = !on; if(text) $("#busyText").textContent = text; $("#sample").disabled = on; }
+
+$("#pick").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  $("#error").textContent = "";
+  setBusy(true, "Reading the photo, about 40 seconds…");
+  try{
+    const {blob, url} = await shrink(f);
+    const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
+    const body = await r.json();
+    if(!r.ok){ $("#error").textContent = body.message || ("The engine said: " + body.error); return; }
+    show(body, url);
+  }catch(err){ $("#error").textContent = "The photo could not be sent. Check the connection and try again."; }
+  finally{ setBusy(false); e.target.value = ""; }
+});
+
+$("#sample").addEventListener("click", async () => {
+  $("#error").textContent = "";
+  try{
+    const r = await fetch("sample");
+    if(!r.ok){ $("#error").textContent = "The recorded example is not published yet."; return; }
+    const body = await r.json();
+    show(body, body.photo);
+  }catch{ $("#error").textContent = "The recorded example could not be loaded."; }
+});
+
+function show(res, photoUrl){
+  current = res;
+  $("#result").hidden = false;
+  const m = $("#mode"); m.textContent = res.mode === "LIVE" ? "Live result" : "Recorded example";
+  m.className = "chip " + (res.mode === "LIVE" ? "live" : "rec");
+  const [t, sub] = ACTION[res.action] || [res.action, ""];
+  const d = $("#decision"); d.className = "decision " + res.action;
+  d.innerHTML = `<b></b><p class="muted"></p><ul></ul>`;
+  d.querySelector("b").textContent = t; d.querySelector("p").textContent = sub;
+  for(const w of res.why || []){ const li = document.createElement("li"); li.textContent = why(w); d.querySelector("ul").append(li); }
+  steps(res); draw(res, photoUrl); list(res);
+}
+
+function steps(res){
+  const box = $("#steps"); box.innerHTML = "";
+  const names = {frames:"Photo", gate:"Quality check", propose:"Model reading", planes:"Shelf check", zoom:"Close-up re-read", decide:"Decision"};
+  let prev = 0;
+  for(const s of res.trace || []){
+    const el = document.createElement("div"); el.className = "step";
+    const ms = Math.max(0, s.ms - prev); prev = s.ms;
+    let detail = "";
+    if(s.step === "gate") detail = s.passed ? "passed" : "failed: " + s.reasons.join(", ");
+    if(s.step === "propose") detail = `${s.items} items` + (s.cost ? ` · $${s.cost.toFixed(3)}` : "");
+    if(s.step === "planes") detail = `${s.checks.filter(c=>c.confirmed).length}/${s.checks.length} shelves seen`;
+    if(s.step === "zoom") detail = `${s.calls} close-ups`;
+    if(s.step === "frames") detail = `${s.size[0]}×${s.size[1]}`;
+    if(s.step === "decide") detail = s.action;
+    el.innerHTML = `<b></b><span></span><div class="mono muted"></div>`;
+    el.querySelector("b").textContent = names[s.step] || s.step;
+    el.querySelector("span").textContent = detail;
+    el.querySelector("div").textContent = (ms/1000).toFixed(1) + " s";
+    box.append(el);
+  }
+}
+
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function draw(res, url){
+  const cv = $("#cv"), ctx = cv.getContext("2d");
+  const fr = (res.trace || []).find(s => s.step === "frames");
+  const img = new Image();
+  img.onload = () => {
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+    const k = fr ? img.naturalWidth / fr.size[0] : 1;  // canonical px -> displayed px
+    const lw = Math.max(2, cv.width / 400);
+    const pl = (res.trace || []).find(s => s.step === "planes");
+    for(const c of (pl ? pl.checks : [])){
+      const y = (c.confirmed ? c.snapped_y : c.proposed_y) * cv.height;
+      ctx.strokeStyle = c.confirmed ? css("--ok") : css("--ask"); ctx.lineWidth = lw*1.5;
+      ctx.setLineDash(c.confirmed ? [] : [lw*4, lw*3]);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cv.width, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    for(const it of (res.proposal && res.proposal.items) || []){
+      const b = it.box; if(!Array.isArray(b) || b.length !== 4) continue;
+      ctx.strokeStyle = "#4aa3df"; ctx.lineWidth = lw*0.7;
+      ctx.strokeRect(b[0]*k, b[1]*k, (b[2]-b[0])*k, (b[3]-b[1])*k);
+    }
+    const z = res.zoom || {}; const worst = {};
+    const rank = {same:0, unresolved:1, provisional:2, conflict:3};
+    for(const o of z.observations || []) worst[o.item_id] = Math.max(worst[o.item_id] ?? 0, rank[o.outcome]);
+    const col = [css("--ok"), css("--grey"), css("--ask"), css("--bad")];
+    for(const p of z.plans || []){
+      const [x0,y0,x1,y1] = p.rect;
+      ctx.strokeStyle = col[worst[p.item_id] ?? 1]; ctx.lineWidth = lw*2;
+      ctx.strokeRect(x0*k, y0*k, (x1-x0)*k, (y1-y0)*k);
+    }
+  };
+  img.src = url;
+}
+
+function list(res){
+  const tb = $("#rows"); tb.innerHTML = "";
+  const items = (res.proposal && res.proposal.items) || [];
+  $("#listCard").hidden = res.action === "retake" || !items.length;
+  const obs = {};
+  for(const o of (res.zoom && res.zoom.observations) || []) (obs[o.item_id] ||= []).push(o);
+  items.forEach((it, i) => {
+    const tr = document.createElement("tr");
+    const os = obs[it.id] || [];
+    const lab = os.find(o => o.field === "label"), cnt = os.find(o => o.field === "quantity");
+    const labelVal = lab ? (lab.effective ?? "") : (it.label ?? "");
+    const countVal = cnt ? (cnt.effective ?? "") : (it.quantity ?? "");
+    tr.innerHTML = `<td class="mono"></td><td></td><td><input></td><td class="q"><input inputmode="numeric"></td><td></td>`;
+    tr.children[0].textContent = it.id;
+    tr.children[1].textContent = it.appearance || "";
+    tr.children[2].querySelector("input").value = labelVal;
+    tr.children[2].querySelector("input").setAttribute("aria-label", `Label of ${it.id}`);
+    tr.children[3].querySelector("input").value = countVal;
+    tr.children[3].querySelector("input").setAttribute("aria-label", `Count of ${it.id}`);
+    for(const o of os){
+      const t = document.createElement("div"); t.style.display = "grid"; t.style.gap = "4px";
+      const tag = document.createElement("span"); tag.className = "tag t-" + o.outcome;
+      tag.textContent = `${o.field === "quantity" ? "count" : "label"}: ${o.outcome}`;
+      t.append(tag);
+      if(o.outcome === "conflict" || o.outcome === "provisional"){
+        const opts = document.createElement("div"); opts.className = "row";
+        for(const [name, v] of [["first reading", o.full], ["close-up", o.crop]]){
+          if(v === null || v === undefined) continue;
+          const b = document.createElement("button"); b.type = "button"; b.textContent = `${name}: ${v}`;
+          b.style.padding = "3px 8px"; b.style.fontSize = ".78rem";
+          b.onclick = () => { tr.children[o.field === "quantity" ? 3 : 2].querySelector("input").value = v; };
+          opts.append(b);
+        }
+        t.append(opts);
+      }
+      if(o.note){ const n = document.createElement("span"); n.className = "muted"; n.style.fontSize = ".78rem";
+        n.textContent = o.note === "unresolved:truncated" ? "group cut by the photo edge" : o.note === "unresolved:blurry" ? "too blurry to re-read" : o.note; t.append(n); }
+      tr.children[4].append(t);
+    }
+    tb.append(tr);
+  });
+  $("#saved").textContent = "";
+}
+
+$("#commit").addEventListener("click", () => {
+  if(!current) return;
+  const rows = [...document.querySelectorAll("#rows tr")].map(tr => ({
+    id: tr.children[0].textContent, appearance: tr.children[1].textContent,
+    label: tr.children[2].querySelector("input").value || null,
+    count: tr.children[3].querySelector("input").value || null}));
+  try{ sessionStorage.setItem("confirmed", JSON.stringify({at: Date.now(), rows})); }catch{}
+  $("#saved").textContent = `Confirmed ${rows.length} items. Kept in this browser tab only; nothing is sent.`;
+});
+
+health();
+</script>
+</body>
+</html>

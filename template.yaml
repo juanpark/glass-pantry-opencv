@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Glass Pantry OpenCV engine (OpenCV AI Competition 2026). Owner-made resources (role, log group, ECR repo, upload bucket, call-counter table) are referenced, never created here.
+
+Parameters:
+  EngineSha:
+    Type: String
+    Default: dev
+  DailyScans:
+    Type: Number
+    Default: 40
+
+Resources:
+  Engine:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: glass-pantry-opencv
+      PackageType: Image
+      Architectures: [x86_64]
+      MemorySize: 2048
+      Timeout: 150
+      Role: arn:aws:iam::155669502936:role/glass-pantry-opencv-fn
+      LoggingConfig:
+        LogGroup: /aws/lambda/glass-pantry-opencv
+      Environment:
+        Variables:
+          ENGINE_SHA: !Ref EngineSha
+          DAILY_SCANS: !Ref DailyScans
+          TABLE: glass-pantry-opencv-calls
+      FunctionUrlConfig:
+        AuthType: NONE
+    Metadata:
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: latest
+
+  # Function URLs with AuthType NONE also need lambda:InvokeFunction granted through the URL.
+  InvokeViaUrl:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Engine
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  Url:
+    Value: !GetAtt EngineUrl.FunctionUrl
