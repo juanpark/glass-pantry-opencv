@@ -1,17 +1,53 @@
-# Glass Pantry verifier (OpenCV AI Competition 2026)
+# Glass Pantry Shelf Check (OpenCV AI Competition 2026)
 
-A vision-language model proposes what stands on a fridge shelf. OpenCV 5 checks the photo and the proposal, and
-that check decides the next action: **file** it into the fridge's 3D twin, **ask** the person, or ask for a
-**retake**.
+Photograph one fridge or pantry shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 checks the
+photo and the reading, picks the small labels and counts worth a second look, and has them re-read from the
+full-resolution photo. What OpenCV finds decides the next action: **file** the list, **ask** the person, or ask for a
+**retake**. A person confirms before anything is kept.
+
+![Architecture](docs/architecture/architecture.png)
+
+## Run it
 
 ```
-uv sync            # Python 3.12, pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4
-uv run pytest      # generated test images only; no personal photos in this repo
+uv sync                 # Python 3.12; pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4 (uv.lock)
+uv run pytest           # generated images and a fake model API only: no photos, no paid calls
 ```
 
-| Module | Does |
+Real model runs need an Anthropic API key in `.env.local` (`ANTHROPIC_API_KEY=...`, git-ignored):
+
+```
+uv run python tools/run_dev.py OUT_DIR photo.jpg --zoom     # result JSON, crops, overlay picture
+uv run python tools/serve_local.py --live                   # the web page on http://127.0.0.1:8765
+```
+
+## Deploy (AWS)
+
+`.github/workflows/deploy.yml` tests, builds the Lambda container (x86_64) with SAM, and deploys the stack
+`glass-pantry-opencv` in us-east-1 on every push to `main`. It signs in with GitHub OIDC (no stored keys) to a
+role limited to this stack's own resources, then smoke-tests the endpoint and checks that the role is refused
+elsewhere. The owner creates the execution role, the log group, the ECR repository, the upload bucket and the
+call-counter table once (`template.yaml` names them).
+
+Guards on the live endpoint (all server-side): an owner on/off switch in Parameter Store, a shared daily scan cap
+(atomic DynamoDB counter, fails closed), upload size and pixel limits, a time budget for every model call, and
+logs that hold codes and counts only.
+
+## Code
+
+| Path | Does |
 |---|---|
-| `verifier/gate.py` | photo gate: blur, shake, dark, blown-out |
-| `verifier/planes.py` | shelf lines the model proposed vs real horizontal edges (Canny + Hough) |
-| `verifier/decide.py` | evidence -> retake / ask / file |
-| `verifier/scan.py` | one photo through the loop, with a trace of every step |
+| `verifier/frames.py` | one canonical 1568 px image for every check and the model; the original kept for close-ups |
+| `verifier/gate.py` | photo gate: blur, shake, dark, blown-out (no model call on a bad photo) |
+| `verifier/prompt.py` | the Glass Pantry app's scan prompt, frozen with a hash |
+| `verifier/claude.py` | Messages API calls, answer parsing and validation, the label judge |
+| `verifier/planes.py` | shelf lines from the model checked against real horizontal edges (Canny + probabilistic Hough) |
+| `verifier/zoom.py` | the zoom pass: OpenCV selects, crops from the original, the model re-reads, the result is reconciled |
+| `verifier/decide.py` | evidence → file / ask / retake |
+| `verifier/scan.py` | one photo through the loop, with a timed trace of every step |
+| `verifier/change.py` | experiment, not in the service: what changed between two photos of a shelf |
+| `service/handler.py` | the Lambda handler: page, health, recorded example, scan |
+| `web/index.html` | the page: upload, overlays, the list to confirm |
+| `tools/` | local runs, annotation of results, the evaluation diagnostic |
+
+Docs: [architecture](docs/architecture/), [where the code came from](docs/provenance.md).
