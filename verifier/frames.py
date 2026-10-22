@@ -34,8 +34,14 @@ class Frames:
         return tuple(round(v / self.scale, 1) for v in rect)
 
 
-def decode(b: bytes) -> np.ndarray | None:
-    return cv2.imdecode(np.frombuffer(b, np.uint8), cv2.IMREAD_COLOR) if b else None
+def decode(b: bytes, flags: int = cv2.IMREAD_COLOR) -> np.ndarray | None:
+    """None for anything that is not a photo this service can read, including one over the pixel limit."""
+    if not b:
+        return None
+    try:
+        return cv2.imdecode(np.frombuffer(b, np.uint8), flags)
+    except cv2.error:
+        return None
 
 
 def canonical(original_jpeg: bytes) -> Frames | None:
@@ -43,7 +49,7 @@ def canonical(original_jpeg: bytes) -> Frames | None:
     if orig is None:
         return None
     s = LONG / max(orig.shape[:2])
-    stored = cv2.imdecode(np.frombuffer(original_jpeg, np.uint8), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+    stored = decode(original_jpeg, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
     if s >= 1 and stored is not None and np.array_equal(stored, orig):
         return Frames(original_jpeg, orig, orig, 1.0)
     # Larger than the canonical size, or turned by an EXIF orientation tag (a reader might honour it or not, and

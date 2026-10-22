@@ -7,6 +7,7 @@ coordinate the model returns.
 
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import os
 import time
 import urllib.error
@@ -47,18 +48,30 @@ def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: 
     req = urllib.request.Request(URL, data=json.dumps(body).encode(), headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            d = json.load(r)
-            rid = r.headers.get("request-id")
-    except urllib.error.HTTPError as e:  # one attempt only: a retry is a new, separately budgeted call
+
+    def exchange():
         try:
-            kind = json.loads(e.read()).get("error", {}).get("type", "")
-        except Exception:
-            kind = ""
-        raise ModelError(f"http {e.code} {kind}".strip()) from None
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise ModelError(type(e).__name__) from None
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.load(r), r.headers.get("request-id")
+        except urllib.error.HTTPError as e:  # one attempt only: a retry is a new, separately budgeted call
+            try:
+                kind = json.loads(e.read()).get("error", {}).get("type", "")
+            except Exception:
+                kind = ""
+            raise ModelError(f"http {e.code} {kind}".strip()) from None
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            raise ModelError(type(e).__name__) from None
+
+    # The socket timeout bounds each blocking step, not the whole exchange; a wall-clock wait on a worker thread
+    # does. On expiry the caller moves on (the worker is abandoned and its answer, if any, is never used).
+    pool = ThreadPoolExecutor(max_workers=1)
+    fut = pool.submit(exchange)
+    try:
+        d, rid = fut.result(timeout=timeout)
+    except FutureTimeout:
+        raise ModelError("deadline") from None
+    finally:
+        pool.shutdown(wait=False)
     u = d.get("usage", {})
     pin, pout = PRICE.get(model, (0.0, 0.0))
     text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
@@ -78,21 +91,29 @@ def parse_array(text: str) -> list | None:
 
     A truncated answer keeps every object that closed; the half-written last one is dropped, never guessed.
     """
+    return parse_array_checked(text)[0]
+
+
+def parse_array_checked(text: str) -> tuple[list | None, bool]:
+    """(closed objects, whether the array itself was complete: every element parsed and the closing bracket seen)."""
     start = text.find("[")
     if start < 0:
-        return None
-    dec, i, out = json.JSONDecoder(), start + 1, []
+        return None, False
+    dec, i, out, closed = json.JSONDecoder(), start + 1, [], False
     while i < len(text):
         while i < len(text) and text[i] in " \t\r\n,":
             i += 1
-        if i >= len(text) or text[i] == "]":
+        if i >= len(text):
+            break
+        if text[i] == "]":
+            closed = True
             break
         try:
             v, i = dec.raw_decode(text, i)
         except json.JSONDecodeError:
             break
         out.append(v)
-    return out
+    return out, closed
 
 
 def parse_object(text: str) -> dict | None:
@@ -116,8 +137,8 @@ def split(elements: list, h: int) -> tuple[list[float], list[dict]]:
             f = e.get("front")
             if isinstance(f, list) and len(f) == 3 and all(isinstance(v, (int, float)) for v in f) and h:
                 lines.append(round(f[1] / h, 4))
-        elif "id" in e:
-            items.append(e)
+        elif not ({"tray", "compartment"} & e.keys()):
+            items.append(e)  # an item record, with or without a usable id (check_items says which)
     return lines, items
 
 
@@ -146,12 +167,13 @@ class ClaudeProposer:
         h, w = img.shape[:2]
         r = call([image_block(jpeg), {"type": "text", "text": prompt.contents(w, h)}], self.key, deadline=self.deadline)
         self.last_text = r["text"]
-        elements = parse_array(r["text"])
+        elements, closed = parse_array_checked(r["text"])
         lines, items = split(elements or [], h)
         raw = {k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")}
         raw["prompt"] = prompt.VERSION
         raw["parsed"] = elements is not None
-        raw["complete"] = r["stop"] == "end_turn"  # cut off (max_tokens) or refused: the list may be missing items
+        # Cut off, refused, or the array itself broken: what closed is kept, but the list may be missing items.
+        raw["complete"] = r["stop"] == "end_turn" and closed
         return Proposal(shelf_lines=lines, items=items, model=MODEL, raw=raw)
 
 
@@ -172,7 +194,7 @@ class ClaudeAsker:
         return parse_object(r["text"])
 
 
-JUDGE_PROMPT = """Reply with exactly one JSON object and nothing else: {{"same_product": true}} or {{"same_product": false}}
+JUDGE_PROMPT = """Reply with exactly one JSON object and nothing else, no explanation: {{"same_product": true}} or {{"same_product": false}}
 
 Two readings of the label on the same item in a fridge photo. They may differ in language, script, spacing,
 brand name versus generic name, or one may be a part of the other. Do they name the same product?
@@ -191,7 +213,7 @@ class LabelJudge:
     def same(self, a: str, b: str) -> bool:
         text = JUDGE_PROMPT.format(a=json.dumps(a, ensure_ascii=False), b=json.dumps(b, ensure_ascii=False))
         try:
-            r = call([{"type": "text", "text": text}], self.key, model=JUDGE, max_tokens=200, effort=None,
+            r = call([{"type": "text", "text": text}], self.key, model=JUDGE, max_tokens=600, effort=None,
                      deadline=self.deadline)
         except ModelError:
             return False

@@ -116,3 +116,60 @@ def test_a_call_with_no_time_left_is_not_sent():
     import time
     with pytest.raises(claude.ModelError, match="no_time"):
         claude.call([{"type": "text", "text": "x"}], key="k", deadline=time.monotonic() + 3)
+
+
+# ---- Codex V2 R2 ----
+
+def test_a_broken_array_under_end_turn_is_incomplete(monkeypatch):
+    text = full_read([item("i1", (500, 300, 900, 900))])[:-1] + ", BROKEN"
+    fake_api(monkeypatch, [("end_turn", text)])
+    r = scan.run(jpeg(shelf()), claude.ClaudeProposer("k"))
+    assert [i["id"] for i in r["proposal"]["items"]] == ["i1"]
+    assert r["action"] == decide.ASK and "read_incomplete" in r["why"]
+
+
+def test_an_item_without_an_id_is_kept_and_asked_about(monkeypatch):
+    noid = {"appearance": "jar", "box": [500, 300, 900, 900], "quantity": 1}
+    calls = fake_api(monkeypatch, [("end_turn", full_read([item("i1", (300, 300, 340, 360)), noid]))])
+    r = scan.run(jpeg(shelf()), claude.ClaudeProposer("k"), zoomer=zoom.Zoomer(claude.ClaudeAsker("k")))
+    assert len(r["proposal"]["items"]) == 2 and "item_id_invalid" in r["why"] and r["action"] == decide.ASK
+    assert all(o["item_id"] == "i1" for o in r["zoom"]["observations"])
+
+
+def test_a_slow_exchange_is_abandoned_at_the_deadline(monkeypatch):
+    import time
+    import urllib.request
+
+    def slow(req, timeout=None):
+        time.sleep(9)  # every step within its socket timeout, the whole exchange too long
+        raise AssertionError("never reached in time")
+    monkeypatch.setattr(urllib.request, "urlopen", slow)
+    t0 = time.monotonic()
+    with pytest.raises(claude.ModelError, match="deadline"):
+        claude.call([{"type": "text", "text": "x"}], key="k", deadline=t0 + claude.RESERVE + 5.5)
+    assert time.monotonic() - t0 < 6.5
+
+
+def test_a_crop_that_times_out_leaves_a_reviewable_unresolved_result():
+    class Slow:
+        def ask(self, crop, fields, target):
+            raise claude.ModelError("deadline")
+    f = frames.canonical(jpeg(shelf()))
+    z = zoom.Zoomer(Slow()).run(f, [item("i1", SMALL, label="MILK")], {})
+    (o,) = z["observations"]
+    assert o["outcome"] == "unresolved" and o["effective"] == "MILK"
+
+
+def test_an_over_budget_skip_keeps_the_persons_value():
+    its = [item(f"i{n}", (100 + 60 * n, 300, 140 + 60 * n, 360), label="x") for n in range(5)]
+    f = frames.canonical(jpeg(shelf()))
+    z = zoom.Zoomer(FakeAsker({"label": "x", "label_readable": True}), budget=4).run(
+        f, its, {(f"i{n}", "label"): "mine" for n in range(5)})
+    over = [o for o in z["observations"] if o["note"] == "skipped:budget"]
+    assert over and all(o["effective"] == "mine" for o in over)
+
+
+def test_a_close_up_reading_more_of_the_same_label_is_same():
+    (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label="양념소스"), {"label"},
+                          {"label": "60계 Chicken Sauce 양념소스", "label_readable": True}, {})
+    assert o.outcome == "same"

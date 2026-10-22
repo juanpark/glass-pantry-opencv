@@ -118,3 +118,15 @@ def test_the_lambda_time_budget_reaches_the_scanner():
     h.handler(ev("POST", "/scan", real_jpeg()), Ctx(), scanner=sc, is_enabled=lambda: True,
               admitter=lambda: True, key=lambda: "k")
     assert 55 < got["d"] - t <= 60.5
+
+
+def test_a_photo_too_big_to_decode_is_refused_before_counting():
+    import struct
+    import zlib
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 40000, 40000, 8, 2, 0, 0, 0)) + chunk(b"IEND", b"")
+    s, b = call(ev("POST", "/scan", png), scanner=lambda j, k, **_: pytest.fail("no scan"),
+                admitter=lambda: pytest.fail("not counted"))
+    assert s == 400 and b["error"] == "bad_photo"

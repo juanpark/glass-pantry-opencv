@@ -172,8 +172,8 @@ def reconcile(it: dict, fields, answer: dict | None, confirmed: dict, same_label
                 o = ("unresolved", full)
             elif full is None:
                 o = ("provisional", None)  # shown as a candidate, never as the item's label
-            elif _norm(crop) == _norm(full) or (partial and _norm(crop) in _norm(full)):
-                o = ("same", full)  # a partly hidden label that matches what it shows
+            elif _norm(crop) == _norm(full) or (partial and _norm(crop) in _norm(full)) or _norm(full) in _norm(crop):
+                o = ("same", full)  # a partly hidden label that matches, or a close-up that reads more of the same
             elif same_label is not None and same_label(full, crop):
                 o = ("same", full)  # same product written another way (language, brand vs generic name)
             else:
