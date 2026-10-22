@@ -22,6 +22,7 @@ BLURRY = 40.0  # Laplacian variance of the box (original pixels) below this: no 
 EDGE = 2  # px from the photo edge that counts as touching it
 PAD = 0.35  # crop margin around the box, as a share of its larger side
 BUDGET = 4  # crop calls per scan, fixed before any test
+CROP_LONG = 1568  # a crop larger than this is reduced (the model refuses images over its size limit)
 
 
 @dataclass(frozen=True)
@@ -106,39 +107,55 @@ def select(canon: np.ndarray, original: np.ndarray, scale: float, items: list[di
     return plans[:budget], skipped
 
 
-def crop_jpeg(original: np.ndarray, rect_original) -> bytes:
+def crop_image(original: np.ndarray, rect_original) -> tuple[np.ndarray, float]:
+    """The crop at full detail, reduced only if it is larger than CROP_LONG. Returns it and its scale."""
     x0, y0, x1, y1 = (int(round(v)) for v in rect_original)
-    return cv2.imencode(".jpg", original[y0:y1, x0:x1], [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()
+    c = original[y0:y1, x0:x1]
+    s = min(1.0, CROP_LONG / max(c.shape[:2]))
+    if s < 1.0:
+        c = cv2.resize(c, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    return c, s
 
 
-def target_in_crop(p: Plan, scale: float, it: dict) -> tuple:
-    """The item's box inside its crop, in crop (original) pixels. The asker is told where the item is, never what
-    the full-photo reading said it was, so the second look is not steered by the first."""
+def crop_jpeg(original: np.ndarray, rect_original) -> bytes:
+    return cv2.imencode(".jpg", crop_image(original, rect_original)[0], [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()
+
+
+def target_in_crop(p: Plan, scale: float, it: dict, crop_scale: float = 1.0) -> tuple:
+    """The item's box inside its crop, in the pixels of the crop as sent. The asker is told where the item is,
+    never what the full-photo reading said it was, so the second look is not steered by the first."""
     x0, y0 = p.rect_original[0], p.rect_original[1]
     b = [v / scale for v in it["box"]]
     cw, ch = p.rect_original[2] - x0, p.rect_original[3] - y0
-    return (int(round(p.rect_original[2] - x0)), int(round(p.rect_original[3] - y0)),
-            *(int(round(min(max(v, 0), lim))) for v, lim in ((b[0] - x0, cw), (b[1] - y0, ch), (b[2] - x0, cw), (b[3] - y0, ch))))
+    k = crop_scale
+    return (int(round(cw * k)), int(round(ch * k)),
+            *(int(round(min(max(v, 0), lim) * k)) for v, lim in ((b[0] - x0, cw), (b[1] - y0, ch), (b[2] - x0, cw), (b[3] - y0, ch))))
 
 
 def _norm(s):
     return "".join(str(s).split()).lower() if s is not None else None
 
 
-def reconcile(it: dict, fields, answer: dict | None, confirmed: dict) -> list[Observation]:
-    """One observation per field, by the C1 table. `answer` None = failed, refused or malformed call."""
+def reconcile(it: dict, fields, answer: dict | None, confirmed: dict, same_label=None) -> list[Observation]:
+    """One observation per field, by the C1 table. `answer` None = failed, refused or malformed call.
+    `same_label(a, b)`: optional judge for two label strings that differ only in language, script or form."""
     out = []
     for f in sorted(fields):
         full = it.get(f)
         person = confirmed.get((it["id"], f))
         if f == "label":
             crop = answer.get("label") if isinstance(answer, dict) and answer.get("label_readable") is True else None
+            partial = isinstance(answer, dict) and answer.get("label_partial") is True
+            if crop is not None and partial and len(_norm(crop)) < 3:
+                crop = None  # a fragment of one or two letters is too little to agree or disagree with anything
             if crop is None:
                 o = ("unresolved", full)
             elif full is None:
                 o = ("provisional", None)  # shown as a candidate, never as the item's label
-            elif _norm(crop) == _norm(full) or (answer.get("label_partial") is True and _norm(crop) in _norm(full)):
+            elif _norm(crop) == _norm(full) or (partial and _norm(crop) in _norm(full)):
                 o = ("same", full)  # a partly hidden label that matches what it shows
+            elif same_label is not None and same_label(full, crop):
+                o = ("same", full)  # same product written another way (language, brand vs generic name)
             else:
                 o = ("conflict", full)
         else:
@@ -181,8 +198,8 @@ class Zoomer:
     """Runs the pass with any `asker` (a model call, a recording, or a fake):
     ask(crop_jpeg, fields, target) -> dict | None, where target = (crop_w, crop_h, x0, y0, x1, y1)."""
 
-    def __init__(self, asker, budget: int = BUDGET):
-        self.asker, self.budget = asker, budget
+    def __init__(self, asker, budget: int = BUDGET, judge=None):
+        self.asker, self.budget, self.judge = asker, budget, judge
 
     def run(self, frames, items: list[dict], confirmed: dict | None = None) -> dict:
         confirmed = confirmed or {}
@@ -192,13 +209,15 @@ class Zoomer:
         for p in plans:
             it = by_id[p.item_id]
             try:
-                answer = self.asker.ask(crop_jpeg(frames.original, p.rect_original), p.fields, target_in_crop(p, frames.scale, it))
+                img, k = crop_image(frames.original, p.rect_original)
+                jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()
+                answer = self.asker.ask(jpg, p.fields, target_in_crop(p, frames.scale, it, k))
             except Exception as e:  # a failed call keeps the existing evidence, unresolved
                 answer = None
-                calls.append({"item_id": p.item_id, "error": type(e).__name__})
+                calls.append({"item_id": p.item_id, "error": str(e)[:60] or type(e).__name__})
             else:
                 calls.append({"item_id": p.item_id, "answer": answer})
-            observations += reconcile(it, p.fields, answer, confirmed)
+            observations += reconcile(it, p.fields, answer, confirmed, self.judge.same if self.judge else None)
         for item_id, f, reason in skipped:
             it = by_id.get(item_id, {})
             observations.append(Observation(item_id, f, it.get(f), None, "unresolved", it.get(f), note=reason))

@@ -65,5 +65,10 @@ def run(jpeg: bytes, proposer: Proposer, zoomer=None, confirmed: dict | None = N
              outcomes=[(o["item_id"], o["field"], o["outcome"]) for o in z["observations"]])
 
     d = decide.after_checks(checks, z["observations"] if z else ())
+    why = list(d.why)
+    if p.raw.get("parsed") is False:
+        why.insert(0, "model_unreadable")  # no list could be read from the answer: never filed as an empty shelf
+    elif not p.items:
+        why.insert(0, "nothing_read")  # a sharp photo with no items: a person says whether the shelf is empty
     proposal = {"model": p.model, "shelf_lines": p.shelf_lines, "items": p.items}
-    return done(d.action, d.why, proposal, z)
+    return done(decide.ASK if why else d.action, why, proposal, z)

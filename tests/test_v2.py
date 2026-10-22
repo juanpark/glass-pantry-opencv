@@ -198,3 +198,41 @@ def test_a_partly_hidden_label_that_matches_is_same():
     (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label="백설 다담 된장찌개 양념"), {"label"},
                           {"label": "백설 다담 된장찌", "label_readable": True, "label_partial": True}, confirmed={})
     assert o.outcome == "same"
+
+
+def test_an_empty_or_unreadable_reading_is_never_filed():
+    img = jpeg(shelf(shelves=(0.3, 0.6)))
+    r = scan.run(img, FakeProposer([], [0.3, 0.6]))
+    assert r["action"] == decide.ASK and r["why"] == ["nothing_read"]
+
+    class Unreadable(FakeProposer):
+        def propose(self, b):
+            return Proposal(shelf_lines=[], items=[], model="fake", raw={"parsed": False})
+    r = scan.run(img, Unreadable([], []))
+    assert r["action"] == decide.ASK and r["why"][0] == "model_unreadable"
+
+
+def test_a_big_crop_is_reduced_to_the_model_limit_and_the_target_follows():
+    big = np.zeros((4000, 4000, 3), np.uint8)
+    c, k = zoom.crop_image(big, (0, 0, 3200, 3100))
+    assert max(c.shape[:2]) == zoom.CROP_LONG and abs(k - 1568 / 3200) < 1e-9
+    p = zoom.Plan("i1", frozenset({"quantity"}), (0, 0, 3200, 3100), (0, 0, 3200, 3100), (), 0.5)
+    t = zoom.target_in_crop(p, 1.0, {"box": [320, 310, 2880, 2790]}, k)
+    assert t[0] == 1568 and t[2] == round(320 * k)
+
+
+def test_a_judge_turns_a_language_difference_into_same_but_never_invents():
+    it = item("i1", (0, 0, 1, 1), label="땅콩버터")
+    ans = {"label": "SKIPPY PEANUT BUTTER", "label_readable": True}
+    (o,) = zoom.reconcile(it, {"label"}, ans, {}, same_label=lambda a, b: True)
+    assert o.outcome == "same" and o.effective == "땅콩버터"
+    (o,) = zoom.reconcile(it, {"label"}, ans, {}, same_label=lambda a, b: False)
+    assert o.outcome == "conflict"
+    (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label=None), {"label"}, ans, {}, same_label=lambda a, b: True)
+    assert o.outcome == "provisional"  # nothing to compare with: the judge is not asked
+
+
+def test_a_one_letter_fragment_is_unresolved_not_a_conflict():
+    (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label="오뚜기 드레싱"), {"label"},
+                          {"label": "탈", "label_readable": True, "label_partial": True}, {})
+    assert o.outcome == "unresolved"

@@ -78,13 +78,17 @@ def main():
                     (out / f"{stem}__crop{SavingAsker.n}.jpg").write_bytes(crop)
                     return asker.ask(crop, fields, target)
 
+            judge = claude.LabelJudge()
+            proposer = claude.ClaudeProposer()
             try:
-                res = scan.run(raw, claude.ClaudeProposer(), zoomer=zoom.Zoomer(SavingAsker()) if a.zoom else None)
+                res = scan.run(raw, proposer, zoomer=zoom.Zoomer(SavingAsker(), judge=judge) if a.zoom else None)
             except claude.ModelError as e:
                 print(f"{stem}: model error {e}")
                 continue
-            res["ask_log"] = asker.log
-            cost = sum(s.get("cost", 0) for s in res["trace"] if s["step"] == "propose") + sum(x["cost"] for x in asker.log)
+            res["ask_log"], res["judge_log"] = asker.log, judge.log
+            (out / f"{stem}__model.txt").write_text(proposer.last_text or "")
+            cost = (sum(s.get("cost", 0) for s in res["trace"] if s["step"] == "propose")
+                    + sum(x["cost"] for x in asker.log + judge.log))
             total += cost
             (out / f"{stem}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str))
             cv2.imwrite(str(out / f"{stem}__overlay.jpg"), overlay(f, res), [cv2.IMWRITE_JPEG_QUALITY, 85])

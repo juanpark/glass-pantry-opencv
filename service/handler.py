@@ -94,12 +94,12 @@ def _photo(event) -> bytes | None:
 
 def scan_photo(jpeg: bytes, key: str) -> dict:
     from verifier import claude, scan, zoom
-    asker = claude.ClaudeAsker(key)
-    res = scan.run(jpeg, claude.ClaudeProposer(key), zoomer=zoom.Zoomer(asker))
+    asker, judge = claude.ClaudeAsker(key), claude.LabelJudge(key)
+    res = scan.run(jpeg, claude.ClaudeProposer(key), zoomer=zoom.Zoomer(asker, judge=judge))
     res["mode"] = "LIVE"
-    res["model_calls"] = 1 + len(asker.log) if res["proposal"] else 0
+    res["model_calls"] = (1 if res["proposal"] else 0) + len(asker.log) + len(judge.log)
     res["cost_usd"] = round(sum(s.get("cost", 0) for s in res["trace"] if s["step"] == "propose")
-                            + sum(x["cost"] for x in asker.log), 4)
+                            + sum(x["cost"] for x in asker.log + judge.log), 4)
     return res
 
 

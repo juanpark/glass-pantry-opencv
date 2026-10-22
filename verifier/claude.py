@@ -18,7 +18,8 @@ from .scan import Proposal
 URL = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-opus-5-5"
 EFFORT = "low"
-PRICE = {"claude-opus-5-5": (4.0, 20.0)}  # USD per million input / output tokens (platform.claude.com pricing, 10/2026)
+JUDGE = "claude-haiku-5-5"
+PRICE = {"claude-opus-5-5": (4.0, 20.0), "claude-haiku-5-5": (0.10, 0.50)}  # USD / million tokens in, out (platform.claude.com, 10/2026)
 TIMEOUT = 120
 
 
@@ -26,12 +27,13 @@ class ModelError(Exception):
     pass
 
 
-def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: int = 8192) -> dict:
+def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: int = 8192, effort: str | None = EFFORT) -> dict:
     key = key or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise ModelError("no API key")
-    body = {"model": model, "max_tokens": max_tokens, "output_config": {"effort": EFFORT},
-            "messages": [{"role": "user", "content": content}]}
+    body = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": content}]}
+    if effort:
+        body["output_config"] = {"effort": effort}
     req = urllib.request.Request(URL, data=json.dumps(body).encode(), headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     t0 = time.time()
@@ -40,7 +42,11 @@ def call(content: list, key: str | None = None, model: str = MODEL, max_tokens: 
             d = json.load(r)
             rid = r.headers.get("request-id")
     except urllib.error.HTTPError as e:  # one attempt only: a retry is a new, separately budgeted call
-        raise ModelError(f"http {e.code}") from None
+        try:
+            kind = json.loads(e.read()).get("error", {}).get("type", "")
+        except Exception:
+            kind = ""
+        raise ModelError(f"http {e.code} {kind}".strip()) from None
     except (urllib.error.URLError, TimeoutError) as e:
         raise ModelError(type(e).__name__) from None
     u = d.get("usage", {})
@@ -107,17 +113,19 @@ def split(elements: list, h: int) -> tuple[list[float], list[dict]]:
 
 class ClaudeProposer:
     def __init__(self, key: str | None = None):
-        self.key = key
+        self.key, self.last_text = key, None  # last_text: for local review only, never logged
 
     def propose(self, jpeg: bytes) -> Proposal:
         from .frames import decode
         img = decode(jpeg)
         h, w = img.shape[:2]
         r = call([image_block(jpeg), {"type": "text", "text": prompt.contents(w, h)}], self.key)
-        elements = parse_array(r["text"]) or []
-        lines, items = split(elements, h)
+        self.last_text = r["text"]
+        elements = parse_array(r["text"])
+        lines, items = split(elements or [], h)
         raw = {k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")}
         raw["prompt"] = prompt.VERSION
+        raw["parsed"] = elements is not None
         return Proposal(shelf_lines=lines, items=items, model=MODEL, raw=raw)
 
 
@@ -134,3 +142,30 @@ class ClaudeAsker:
         r = call([image_block(crop_jpeg), {"type": "text", "text": text}], self.key, max_tokens=400)
         self.log.append({k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")})
         return parse_object(r["text"])
+
+
+JUDGE_PROMPT = """Reply with exactly one JSON object and nothing else: {{"same_product": true}} or {{"same_product": false}}
+
+Two readings of the label on the same item in a fridge photo. They may differ in language, script, spacing,
+brand name versus generic name, or one may be a part of the other. Do they name the same product?
+
+A: {a}
+B: {b}"""
+
+
+class LabelJudge:
+    """Text only, no image: are two label readings the same product (서울우유 / SEOUL MILK; 땅콩버터 / SKIPPY PEANUT BUTTER)?
+    It can only turn a string mismatch into "same"; it never invents a label. Unsure or failed counts as different."""
+
+    def __init__(self, key: str | None = None):
+        self.key, self.log = key, []
+
+    def same(self, a: str, b: str) -> bool:
+        text = JUDGE_PROMPT.format(a=json.dumps(a, ensure_ascii=False), b=json.dumps(b, ensure_ascii=False))
+        try:
+            r = call([{"type": "text", "text": text}], self.key, model=JUDGE, max_tokens=200, effort=None)
+        except ModelError:
+            return False
+        self.log.append({k: r[k] for k in ("request_id", "ms", "in", "out", "cost", "stop")} | {"model": JUDGE})
+        v = parse_object(r["text"])
+        return isinstance(v, dict) and v.get("same_product") is True

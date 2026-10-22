@@ -94,7 +94,7 @@ td.q input{min-width:52px;width:64px}
       <span><span class="sw" style="background:var(--ok)"></span>shelf edge confirmed by OpenCV</span>
       <span><span class="sw" style="background:var(--ask)"></span>shelf the photo does not show</span>
       <span><span class="sw" style="background:#4aa3df"></span>item the model proposed</span>
-      <span><span class="sw" style="background:var(--bad)"></span>re-read disagrees</span>
+      <span><span class="sw" style="background:var(--bad)"></span>close-up re-read disagrees (dashed: the close-up sent)</span>
       <span><span class="sw" style="background:var(--ok);opacity:.6"></span>re-read agrees</span>
       <span><span class="sw" style="background:var(--grey)"></span>re-read could not tell</span>
     </div>
@@ -120,7 +120,9 @@ const $ = s => document.querySelector(s);
 const WHY = {
   "photo:blurry": "The photo is out of focus.", "photo:shake": "The photo is smeared by movement.",
   "photo:dark": "The photo is too dark to read labels.", "photo:blown": "Glare or overexposure hides part of the shelf.",
-  "photo:unreadable": "The file could not be opened as a photo."
+  "photo:unreadable": "The file could not be opened as a photo.",
+  "nothing_read": "The model listed nothing on this shelf. Is it empty?",
+  "model_unreadable": "The model's answer could not be read. Try again or take a new photo."
 };
 function why(code){
   if (WHY[code]) return WHY[code];
@@ -254,10 +256,15 @@ function draw(res, url){
     const rank = {same:0, unresolved:1, provisional:2, conflict:3};
     for(const o of z.observations || []) worst[o.item_id] = Math.max(worst[o.item_id] ?? 0, rank[o.outcome]);
     const col = [css("--ok"), css("--grey"), css("--ask"), css("--bad")];
+    const byId = Object.fromEntries(((res.proposal && res.proposal.items) || []).map(it => [it.id, it]));
     for(const p of z.plans || []){
-      const [x0,y0,x1,y1] = p.rect;
-      ctx.strokeStyle = col[worst[p.item_id] ?? 1]; ctx.lineWidth = lw*2;
+      const c = col[worst[p.item_id] ?? 1];
+      const [x0,y0,x1,y1] = p.rect;  // the close-up that was sent: thin and dashed
+      ctx.strokeStyle = c; ctx.lineWidth = lw*0.8; ctx.setLineDash([lw*3, lw*2]);
       ctx.strokeRect(x0*k, y0*k, (x1-x0)*k, (y1-y0)*k);
+      ctx.setLineDash([]);
+      const b = byId[p.item_id] && byId[p.item_id].box;  // the item it re-read: thick
+      if(Array.isArray(b)){ ctx.lineWidth = lw*2.2; ctx.strokeRect(b[0]*k, b[1]*k, (b[2]-b[0])*k, (b[3]-b[1])*k); }
     }
   };
   img.src = url;
