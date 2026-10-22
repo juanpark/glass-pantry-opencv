@@ -72,14 +72,15 @@ button.on{background:#1f6f5c;color:#fff}.muted{color:#666}b{font-size:1.1em}</st
 <p class=muted>Which reading matches what is really printed (label) or really there (count)?</p>
 <div class=r id=choices></div><div class=r><button id=prev>Back</button><button id=next>Next</button></div>
 <script>
+const $=id=>document.getElementById(id);  // never rely on ids as globals (window.close shadows "close")
 let items=[],ann={},i=0;
 async function load(){items=await (await fetch('items')).json();ann=await (await fetch('ann')).json();i=items.findIndex(x=>!ann[x.key]);if(i<0)i=0;show()}
-async function show(){const it=items[i];pos.textContent=`${i+1} / ${items.length} · ${Object.keys(ann).length} done`;
-img.src='thumb?i='+i;id.textContent=it.id;app.textContent=it.appearance||'';field.textContent=it.field;
-first.textContent=it.first??'(none)';close.textContent=it.closeup??'(none)';note.textContent=it.note||'';
-choices.innerHTML='';for(const c of ["first","close-up","both","neither","unsure"]){const b=document.createElement('button');b.textContent=c;
-if(ann[it.key]===c)b.className='on';b.onclick=async()=>{ann[it.key]=c;await fetch('ann',{method:'POST',body:JSON.stringify({key:it.key,v:c})});if(i<items.length-1)i++;show()};choices.append(b)}}
-prev.onclick=()=>{if(i>0)i--;show()};next.onclick=()=>{if(i<items.length-1)i++;show()};load();
+async function show(){const it=items[i];$('pos').textContent=`${i+1} / ${items.length} · ${Object.keys(ann).length} done`;
+$('img').src='thumb?i='+i;$('id').textContent=it.id;$('app').textContent=it.appearance||'';$('field').textContent=it.field;
+$('first').textContent=it.first??'(none)';$('close').textContent=it.closeup??'(none)';$('note').textContent=it.note||'';
+$('choices').innerHTML='';for(const c of ["first","close-up","both","neither","unsure"]){const b=document.createElement('button');b.textContent=c;
+if(ann[it.key]===c)b.className='on';b.onclick=async()=>{ann[it.key]=c;await fetch('ann',{method:'POST',body:JSON.stringify({key:it.key,v:c})});if(i<items.length-1)i++;show()};$('choices').append(b)}}
+$('prev').onclick=()=>{if(i>0)i--;show()};$('next').onclick=()=>{if(i<items.length-1)i++;show()};load();
 </script>"""
 
 

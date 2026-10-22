@@ -236,3 +236,14 @@ def test_a_one_letter_fragment_is_unresolved_not_a_conflict():
     (o,) = zoom.reconcile(item("i1", (0, 0, 1, 1), label="오뚜기 드레싱"), {"label"},
                           {"label": "탈", "label_readable": True, "label_partial": True}, {})
     assert o.outcome == "unresolved"
+
+
+def test_sharpness_is_measured_at_400_px_and_small_boxes_are_not_enlarged():
+    rng = np.random.default_rng(1)
+    big = rng.integers(0, 255, (2000, 2000, 3), dtype=np.uint8)
+    small = big[:300, :300]
+    g = cv2.resize(cv2.cvtColor(big, cv2.COLOR_BGR2GRAY), None, fx=0.2, fy=0.2, interpolation=cv2.INTER_AREA)
+    assert abs(zoom._sharpness(big, (0, 0, 2000, 2000)) - cv2.Laplacian(g, cv2.CV_64F).var()) < 1e-6
+    gs = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    assert abs(zoom._sharpness(big, (0, 0, 300, 300)) - cv2.Laplacian(gs, cv2.CV_64F).var()) < 1e-6
+    assert zoom.BLURRY == 60.0 and zoom.SHARP_LONG == 400

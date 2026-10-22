@@ -27,7 +27,7 @@ def test_an_unchanged_reshoot_is_no_visible_change():
     al = change.align(old, new)
     assert al.ok, al
     r = change.compare(old, ITEMS, new, al)
-    assert r["outcome"] == change.SAME, r
+    assert r["outcome"] == change.OLD_ITEMS_SAME and all(o["outcome"] == change.SAME for o in r["items"]), r
 
 
 def test_a_removed_item_is_a_possible_change():
@@ -56,3 +56,25 @@ def test_an_item_outside_the_new_view_cannot_be_compared():
     al = change.align(old, new)
     r = change.compare(old, [{"id": "edge", "box": [40, 420, 200, 640]}], new, al)
     assert r["items"][0]["outcome"] == change.CANNOT
+
+
+def test_an_item_half_out_of_view_cannot_be_compared():
+    old = rng_shelf()
+    new, _ = reshoot(old, dx=-500, dy=0, rot=0, scale=1.0)
+    r = change.compare(old, [{"id": "half", "box": [400, 420, 600, 640]}], new, change.align(old, new))
+    assert r["items"][0]["outcome"] == change.CANNOT, r
+
+
+def test_the_same_view_at_half_resolution_aligns_with_full_overlap():
+    old = rng_shelf()
+    new = cv2.resize(old, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    al = change.align(old, new)
+    assert al.ok and al.overlap > 0.95, al
+
+
+def test_something_new_outside_the_old_boxes_is_not_called_no_change():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+    r = change.compare(old, [{"id": "a", "box": [300, 420, 460, 640]}], new, change.align(old, new))
+    assert r["outcome"] != change.SAME  # at best "compared items unchanged", never a claim about the whole shelf
