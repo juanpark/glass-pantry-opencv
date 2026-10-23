@@ -433,10 +433,14 @@ const OUTLINE_WHY = {
   not_convex: "Two corners have crossed. Put each named corner on its own corner of the opening.",
   not_ordered: "The corners are in the wrong places. Put each named corner on its own corner of the opening.",
   outside_photo: "A corner is outside the photo.",
+  repeated_corner: "Two corners are on top of each other. Put each named corner on its own corner of the opening.",
+  not_finite: "The outline could not be read. Choose the photo again.",
 };
 $("#noCorners").onclick = () => {  // trace on the photo as it is: lines follow the outline, nothing is straightened
   if(!trace || trace.step !== "outline") return;
   trace.op = ops.start("trace"); $("#traceBusy").hidden = true;
+  const bad = T.outlineProblem(trace.corners);  // not straightened, but the lines are still drawn through the outline
+  if(bad){ traceNote(OUTLINE_WHY[bad], "bad"); return; }
   Object.assign(trace, {mode:"unstraightened", confirmedCorners:null, matrix:null, targets:[]});
   startLines("Not straightened, so this layout is marked unverified. Place the outline where the opening would be and drag the lines onto your shelves.");
 };
@@ -450,11 +454,9 @@ function startLines(note){
   drawTrace();
 }
 
-function bandNames(){  // the spaces between the lines, named like the fridge drawing ("Shelf 1", "Drawer 2")
-  const vs = [...trace.lines].map(l => l.v).sort((a, b) => a - b), n = vs.length + 1;
-  const old = levelsOf(trace.comp);
-  if(old.length === n) return old.map(([id]) => levelName(id));
-  return Array.from({length:n}, (_, i) => `Space ${i + 1}`);
+function bandNames(){  // the spaces between the lines, named exactly as Confirm will save them ("Shelf 1", "Drawer 2")
+  const vs = trace.lines.map(l => l.v);
+  return T.traceNames(twin, trace.comp, vs) || Array.from({length:vs.length + 1}, (_, i) => `Space ${i + 1}`);
 }
 
 function drawTrace(){
@@ -565,6 +567,8 @@ $("#delLine").onclick = () => { if(!trace || trace.sel < 0) return; trace.lines.
 
 $("#layoutOk").onclick = () => {
   if(!trace || trace.step !== "lines" || !ops.live(trace.op)) return;
+  const bad = T.outlineProblem(trace.corners);
+  if(bad){ traceNote(OUTLINE_WHY[bad] + " Go back to the outline.", "bad"); return; }
   const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
   const res = T.applyTrace(twin, trace.comp, trace.lines.map(l => l.v), {mode:trace.mode, source:trace.source, size:trace.size,
     corners:trace.mode === "straightened" ? trace.confirmedCorners : null, outline:clone(trace.corners), matrix:trace.matrix, template:tmpl.length});

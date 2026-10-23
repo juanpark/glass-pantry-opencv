@@ -228,3 +228,26 @@ test("the starting lines are the boundaries between the template's levels", () =
   assert.deepEqual(T.levelLines(a, "cold").map(l => l.id), ["cold/L0", "cold/L1", "cold/L2", "cold/L3"]);
   assert.ok(T.levelLines(a, "cold").every(l => l.v > 0 && l.v < 1));
 });
+
+// ---- outline review R1: what step 2 shows is what Confirm saves; an unusable outline never reaches step 2 ----
+test("the names shown for the spaces are the kinds Confirm will save, even when the count is unchanged", () => {
+  const a = T.newTwin(A, "h", rnd);
+  const same = T.levelLines(a, "cold").map(l => l.v);
+  assert.deepEqual(T.traceNames(a, "cold", same), ["Shelf 1", "Shelf 2", "Shelf 3", "Drawer 1", "Drawer 2"]);
+  const moved = [0.05, 0.10, 0.15, 0.20];  // five spaces again, but the drawers' bands no longer overlap them
+  const names = T.traceNames(a, "cold", moved), res = T.applyTrace(a, "cold", moved);
+  assert.deepEqual(names, T.liveLevels(res.next, "cold").map(([, l]) => l.kind === "drawer" ? "Drawer" : "Shelf")
+    .map((k, i, all) => `${k} ${all.slice(0, i + 1).filter(x => x === k).length}`));
+  assert.equal(T.traceNames(a, "cold", [0.5, 0.51]), null);  // a refused layout has no names to promise
+});
+
+test("a crossed, collapsed or out-of-order outline is unusable; a fair one is not", () => {
+  assert.equal(T.outlineProblem(Q), null);
+  assert.equal(T.outlineProblem([[100, 100], [900, 100], [100, 900], [900, 900]]), "not_convex");
+  assert.equal(T.outlineProblem([[0, 0], [0, 0], [0, 0], [0, 0]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[100, 100], [100, 100], [900, 900], [100, 900]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[100, 100], [500, 100], [900, 100], [500, 100.5]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[900, 100], [100, 100], [100, 900], [900, 900]]), "not_ordered");  // mirrored
+  assert.equal(T.outlineProblem([[100, 100], [900, NaN], [900, 900], [100, 900]]), "not_finite");
+  assert.equal(T.squareToQuad([[100, 100], [900, 100], [100, 900], [900, 900]]), null);  // no drawing through it either
+});
