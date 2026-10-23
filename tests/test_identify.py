@@ -196,3 +196,21 @@ def test_a_blurry_photo_is_sent_back_by_the_opencv_gate_before_any_allowance_or_
 def test_a_sharp_photo_passes_the_gate_and_is_read():
     s, b = ident(ev("POST", "/identify", real_jpeg()))
     assert s == 200
+
+
+def _label(bg, fg):
+    """A sharp, readable rating label filling the frame (white paper, or a dark badge)."""
+    import cv2
+    import numpy as np
+    img = np.full((1200, 900, 3), bg, np.uint8)
+    for i, t in enumerate(["SAMSUNG", "MODEL RB38J7200S4/EF", "401 L  R-600a", "2016.01  POLAND"]):
+        cv2.putText(img, t, (40, 200 + i * 180), cv2.FONT_HERSHEY_SIMPLEX, 1.6, (fg, fg, fg), 4, cv2.LINE_AA)
+    return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
+
+
+@pytest.mark.parametrize("bg,fg", [(255, 10), (25, 235)])
+def test_a_sharp_white_or_dark_label_is_read_not_sent_back(bg, fg):
+    spent, calls = [], []
+    s, b = ident(ev("POST", "/identify", _label(bg, fg)), admitter=lambda: spent.append(1) or True,
+                 identifier=lambda j, k, **_: calls.append(1) or {"reading": None, "suggestions": [], "cost_usd": 0})
+    assert s == 200 and spent == [1] and calls == [1]

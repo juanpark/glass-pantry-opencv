@@ -117,19 +117,22 @@ def identify_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict
 
 
 RETAKE = {"blurry": "The photo is blurry. Hold the phone still, tap to focus on the sticker, and try again.",
-          "shake": "The photo is smeared by movement. Hold the phone still and try again.",
-          "dark": "The photo is too dark to read. Turn on a light or move closer to it.",
-          "blown": "Glare hides part of the photo. Tilt the phone a little and try again."}
+          "shake": "The photo is smeared by movement. Hold the phone still and try again."}
+
+
+# Which gate reasons send an identify photo back. Only sharpness: the brightness and glare thresholds were set on
+# shelf photos, and a sharp white sticker (mostly clipped white) or a dark badge would be refused by them.
+IDENTIFY_GATE = {"blurry", "shake"}
 
 
 def _gate(jpeg, route):
     """OpenCV's photo gate before any allowance or model call: a photo it cannot read is sent back, free."""
     from verifier import frames, gate
-    g = gate.check(frames.canonical(jpeg).image)
-    if g.passed:
+    reasons = [r for r in gate.check(frames.canonical(jpeg).image).reasons if r in IDENTIFY_GATE]
+    if not reasons:
         return None
-    _log(route=route, result="retake", reasons=g.reasons)
-    return _resp(422, {"error": "retake", "reasons": g.reasons, "message": " ".join(RETAKE[r] for r in g.reasons)})
+    _log(route=route, result="retake", reasons=reasons)
+    return _resp(422, {"error": "retake", "reasons": reasons, "message": " ".join(RETAKE[r] for r in reasons)})
 
 
 def _admitted(event, route, is_enabled, admitter, pre=None):
