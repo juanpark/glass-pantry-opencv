@@ -278,11 +278,13 @@ def test_time_running_out_inside_the_encoding_starts_no_targets(monkeypatch, cap
     event = ev({"photo": jpeg(img), "corners": corners, "source": source})  # encoded before the clock is rigged
     clock = Clock()
     monkeypatch.setattr(h.time, "monotonic", clock)
-    real = cv2.imencode
+    real, real_warp, warped = cv2.imencode, op.warp, []
 
     def slow_encode(*a, **k):
-        clock.t = 9.0
+        if warped:  # only the warped view's encoding is slow, not the canonical frame's
+            clock.t = 9.0
         return real(*a, **k)
+    monkeypatch.setattr(op, "warp", lambda *a, **k: warped.append(1) or real_warp(*a, **k))
     monkeypatch.setattr(cv2, "imencode", slow_encode)
     monkeypatch.setattr(op, "snap_targets", lambda *a, **k: pytest.fail("no targets after the budget"))
     capsys.readouterr()
