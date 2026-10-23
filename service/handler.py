@@ -171,10 +171,15 @@ def straighten(event, is_enabled, context=None) -> dict:
     if out_of_time():  # no snap targets and no result after the budget
         return late()
     ok, buf = cv2.imencode(".jpg", wp.image, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    if out_of_time():
+        return late()
+    targets = opening.snap_targets(wp.image)
+    if out_of_time():  # nothing is logged or published as a success after the budget
+        return late()
     _log(route="straighten", result="straightened", ms=round((time.time() - t0) * 1000))
     return _resp(200, {"status": "straightened", "image": base64.b64encode(buf.tobytes()).decode(),
                        "image_size": [wp.image.shape[1], wp.image.shape[0]], "matrix": wp.matrix.tolist(),
-                       "targets": opening.snap_targets(wp.image), "size": [w, h], "source": source})
+                       "targets": targets, "size": [w, h], "source": source})
 
 
 def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key):

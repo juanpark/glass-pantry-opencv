@@ -270,3 +270,36 @@ def test_time_running_out_inside_the_contour_search_publishes_nothing(monkeypatc
 def test_the_contour_search_stops_when_told():
     img, _ = opening_photo()
     assert op.propose(img, alive=lambda: False) is None
+
+
+def test_time_running_out_inside_the_encoding_starts_no_targets(monkeypatch, capsys):
+    img, q = opening_photo()
+    corners, source, _ = canonical_corners(img, q)
+    clock = Clock()
+    monkeypatch.setattr(h.time, "monotonic", clock)
+    real = cv2.imencode
+
+    def slow_encode(*a, **k):
+        clock.t = 9.0
+        return real(*a, **k)
+    monkeypatch.setattr(cv2, "imencode", slow_encode)
+    monkeypatch.setattr(op, "snap_targets", lambda *a, **k: pytest.fail("no targets after the budget"))
+    capsys.readouterr()
+    r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and "straightened" not in capsys.readouterr().out
+
+
+def test_time_running_out_inside_the_targets_publishes_nothing(monkeypatch, capsys):
+    img, q = opening_photo()
+    corners, source, _ = canonical_corners(img, q)
+    clock = Clock()
+    monkeypatch.setattr(h.time, "monotonic", clock)
+    real = op.snap_targets
+
+    def slow_targets(*a, **k):
+        clock.t = 9.0
+        return real(*a, **k)
+    monkeypatch.setattr(op, "snap_targets", slow_targets)
+    capsys.readouterr()
+    r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and "image" not in r["body"] and "straightened" not in capsys.readouterr().out
