@@ -105,6 +105,11 @@ def scan_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
     return res
 
 
+# OpenCV's suggestions, judged against hand truth on the test photos (tools/eval_trace.py, gate frozen 10/23):
+# both failed it on 10/23 (corners: worst corner 12-19% of the diagonal off; edges: 93% found but 3-15 spurious per
+# photo), so both are off and the person places corners and lines by hand. Straightening itself stays on.
+SUGGEST_CORNERS = os.environ.get("SUGGEST_CORNERS", "off") == "on"
+SNAP_TARGETS = os.environ.get("SNAP_TARGETS", "off") == "on"
 STRAIGHTEN_RESERVE = 2.0  # seconds kept to encode and return the answer
 STRAIGHTEN_MIN = 1.5  # a stage does not start with less than this left
 
@@ -148,7 +153,7 @@ def straighten(event, is_enabled, context=None) -> dict:
     if corners is None:
         if out_of_time():
             return late()
-        q = opening.propose(f.image, alive=lambda: not out_of_time())
+        q = opening.propose(f.image, alive=lambda: not out_of_time()) if SUGGEST_CORNERS else None
         if out_of_time():  # a suggestion finished late is not published
             return late()
         kind = "contour" if q is not None else "margin"
@@ -173,7 +178,7 @@ def straighten(event, is_enabled, context=None) -> dict:
     ok, buf = cv2.imencode(".jpg", wp.image, [cv2.IMWRITE_JPEG_QUALITY, 88])
     if out_of_time():
         return late()
-    targets = opening.snap_targets(wp.image)
+    targets = opening.snap_targets(wp.image) if SNAP_TARGETS else []
     if out_of_time():  # nothing is logged or published as a success after the budget
         return late()
     _log(route="straighten", result="straightened", ms=round((time.time() - t0) * 1000))

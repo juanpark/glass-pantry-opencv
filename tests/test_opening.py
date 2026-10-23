@@ -103,6 +103,13 @@ def jpeg(img):
     return base64.b64encode(cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()).decode()
 
 
+@pytest.fixture(autouse=True)
+def suggestions_on(monkeypatch):
+    """The route tests exercise the suggestion code; production has it off (see the off-by-default test)."""
+    monkeypatch.setattr(h, "SUGGEST_CORNERS", True)
+    monkeypatch.setattr(h, "SNAP_TARGETS", True)
+
+
 def call(e, **kw):
     kw.setdefault("is_enabled", lambda: True)
     kw.setdefault("admitter", lambda: pytest.fail("straightening is never counted"))
@@ -306,3 +313,22 @@ def test_time_running_out_inside_the_targets_publishes_nothing(monkeypatch, caps
     capsys.readouterr()
     r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
     assert r["statusCode"] == 503 and "image" not in r["body"] and "straightened" not in capsys.readouterr().out
+
+
+def test_suggestions_are_off_by_default_after_failing_the_gate(monkeypatch):
+    monkeypatch.setattr(h, "SUGGEST_CORNERS", False)
+    monkeypatch.setattr(h, "SNAP_TARGETS", False)
+    monkeypatch.setattr(op, "propose", lambda *a, **k: pytest.fail("no corner proposal while switched off"))
+    monkeypatch.setattr(op, "snap_targets", lambda *a, **k: pytest.fail("no snap targets while switched off"))
+    img, q = opening_photo()
+    s, b = call(ev({"photo": jpeg(img)}))
+    assert s == 200 and b["suggestion"] == "margin"
+    s, b = call(ev({"photo": jpeg(img), "corners": (q * b["size"][0] / img.shape[1]).tolist(), "source": b["source"]}))
+    assert s == 200 and b["status"] == "straightened" and b["targets"] == []
+
+
+def test_production_defaults_are_off():
+    import importlib
+    import os
+    assert os.environ.get("SUGGEST_CORNERS") is None and os.environ.get("SNAP_TARGETS") is None
+    assert importlib.reload(h).SUGGEST_CORNERS is False and h.SNAP_TARGETS is False

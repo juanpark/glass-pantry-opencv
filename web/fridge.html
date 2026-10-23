@@ -389,7 +389,7 @@ $("#tracePick").addEventListener("change", async e => {
     Object.assign(trace, {photo, source:body.source, size:body.size, img, corners:body.corners, kind:body.suggestion, mode:"corners"});
     traceNote(body.suggestion === "contour"
       ? "Dashed corners: OpenCV's suggestion, not checked. Drag each one onto a corner of the opening."
-      : "OpenCV found no opening to suggest. Drag each corner onto a corner of the opening.", "ask");
+      : "Drag each orange corner onto a corner of the opening.", "ask");
     $("#traceStage").hidden = false; $("#cornerActions").hidden = false; $("#lineActions").hidden = true;
     drawTrace();
   }catch(err){ if(traceLive(my)) traceNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
@@ -411,7 +411,7 @@ $("#cornersOk").onclick = async () => {
     if(!traceLive(my)) return;
     Object.assign(trace, {mode:"straightened", warped:img, matrix:body.matrix, targets:body.targets, confirmedCorners:corners});
     startLines();
-    traceNote("Straightened to a front view of the opening (shelves set back from it may sit slightly off). Drag the lines onto your shelves; green marks are edges OpenCV sees. A line dropped near a mark lands on it.", "ok");
+    traceNote("OpenCV straightened the opening to a front view (shelves set back from it may sit slightly off). Drag the lines onto your shelves" + (body.targets.length ? "; green marks are edges OpenCV sees, and a line dropped near one lands on it." : "."), "ok");
   }catch{ if(traceLive(my)) traceNote("The photo could not be sent. Check the connection and try again.", "bad"); }
   finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 };
