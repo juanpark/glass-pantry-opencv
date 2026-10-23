@@ -30,3 +30,9 @@ def test_the_page_can_fetch_the_layouts():
     from service import handler as h
     r = h.handler({"rawPath": "/layouts.json", "requestContext": {"http": {"method": "GET"}}})
     assert r["statusCode"] == 200 and r["body"].encode() == LAYOUTS.read_bytes()
+
+
+def test_the_fridge_page_is_served():
+    from service import handler as h
+    r = h.handler({"rawPath": "/fridge", "requestContext": {"http": {"method": "GET"}}})
+    assert r["statusCode"] == 200 and "Glass Pantry Fridge" in r["body"]

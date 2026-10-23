@@ -197,6 +197,8 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         _log(route="scan", result=res["action"], why=len(res["why"]), calls=res.get("model_calls"),
              cost=res.get("cost_usd"), ms=round((time.time() - t0) * 1000))
         return _resp(200, res)
+    if method == "GET" and path == "/fridge":
+        return _resp(200, (ROOT / "web" / "fridge.html").read_text(encoding="utf-8"), "text/html; charset=utf-8")
     if method == "GET" and path == "/layouts.json":
         return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
                      "application/json; charset=utf-8")

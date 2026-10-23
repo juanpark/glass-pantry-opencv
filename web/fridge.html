@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glass Pantry Fridge</title>
+<style>
+/* Plan v4 R3: pick the fridge -> trace each compartment over its photo -> fill each shelf, drawer or door bin.
+   One column; the fridge drawing is the home screen, every task opens beneath it. */
+:root{
+  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c;
+  --ok:#2e8b57; --ask:#c77700; --bad:#c0392b; --info:#2f6fb3; --grey:#8a948e; --code:#eef1ee;
+  --cab:#e9ecea; --cold:#e6f1f6; --freezer:#e8ecf7; --door:#f1efe9;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8;
+  --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26;
+  --cab:#232a27; --cold:#1d2a30; --freezer:#1f2333; --door:#2a2822; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
+  padding:20px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+main{max-width:980px;margin:0 auto;display:grid;gap:18px}
+h1{font-size:1.5rem;margin:0;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:0}
+p{margin:0;max-width:70ch}
+.muted{color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
+.live{color:var(--ok)} .off{color:var(--grey)} .warn{color:var(--ask)}
+button,.btn,select{font:600 .92rem var(--sans);border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+select{font-weight:500;max-width:100%}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{padding:4px 9px;font-size:.8rem}
+button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{display:none}
+label.consent{display:flex;gap:8px;align-items:flex-start}
+.note{padding:10px 12px;border-radius:6px;background:var(--code);font-size:.88rem}
+.note.ask{border-left:5px solid var(--ask)} .note.bad{border-left:5px solid var(--bad)} .note.ok{border-left:5px solid var(--ok)}
+svg{display:block;width:100%;height:auto;max-height:70vh;touch-action:manipulation}
+.lvl{cursor:pointer}
+.lvl:hover rect,.lvl:focus rect{stroke:var(--accent);stroke-width:3}
+.stage{position:relative;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage canvas{width:100%;height:auto;display:block;border-radius:6px;background:var(--code)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td input{width:100%;min-width:90px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+td.q input{min-width:52px;width:64px}
+.tag{font:600 .7rem var(--sans);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.t-same{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.t-conflict{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.t-provisional{background:color-mix(in srgb,var(--ask) 20%,transparent);color:var(--ask)}
+.t-unresolved{background:color-mix(in srgb,var(--grey) 20%,transparent);color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.8rem}
+.spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header class="row" style="justify-content:space-between">
+    <div style="display:grid;gap:6px">
+      <h1>Glass Pantry: your fridge, from photos</h1>
+      <p class="muted">Pick your fridge, trace each compartment over a photo, then photograph each shelf, drawer or door bin to fill it. OpenCV straightens the photo, suggests corners and shelf edges, and checks every reading; you confirm everything.</p>
+    </div>
+    <span id="status" class="chip off">Checking…</span>
+  </header>
+
+  <section class="card">
+    <h2>Before you start</h2>
+    <p>Photos go to this engine on AWS, and shelf photos also to Anthropic's Claude model, to be read. Nothing is stored on the server; your fridge is kept in this browser tab only. Leave people, documents and anything personal out of the frame.</p>
+    <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send photos.</span></label>
+    <p class="muted"><a href="./">Or check a single shelf photo</a></p>
+  </section>
+
+  <section class="card">
+    <h2>1. Your fridge</h2>
+    <div class="row">
+      <select id="model" aria-label="Fridge model"></select>
+      <button id="useModel" type="button">Use this fridge</button>
+    </div>
+    <div id="modelNote" class="note" hidden></div>
+    <p id="modelSource" class="muted" style="font-size:.82rem"></p>
+  </section>
+
+  <section class="card" id="fridgeCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>2. Your fridge, as it stands</h2>
+      <span id="saveState" class="muted" role="status" style="font-size:.85rem"></span>
+    </div>
+    <p class="muted">Tap a shelf, drawer or door bin to fill it from a photo. Use <b>Trace</b> on a compartment to fit its shelves to your fridge.</p>
+    <div id="traceButtons" class="row"></div>
+    <svg id="fridge" role="group" aria-label="Fridge drawing"></svg>
+    <div id="unplacedBox" hidden>
+      <h2 style="font-size:.95rem">Unplaced</h2>
+      <p class="muted" style="font-size:.85rem">Things from a shelf you removed or from a fridge you replaced. Nothing is ever thrown away.</p>
+      <ul class="items" id="unplaced"></ul>
+    </div>
+  </section>
+
+  <section class="card" id="traceCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="traceTitle">Trace</h2>
+      <button id="traceClose" type="button" class="small">Close</button>
+    </div>
+    <p class="muted" id="traceHelp">Photograph the whole compartment with the door fully open. Step back until all four edges of the opening are in the frame.</p>
+    <div class="row">
+      <label class="btn primary" id="tracePickLabel" aria-disabled="true">Choose a compartment photo<input type="file" id="tracePick" accept="image/*" disabled></label>
+      <span id="traceBusy" class="row muted" hidden><span class="spinner"></span><span>Working…</span></span>
+    </div>
+    <div id="traceNote" class="note" hidden></div>
+    <div class="stage" id="traceStage" hidden><canvas id="traceCv"></canvas></div>
+    <div class="row" id="cornerActions" hidden>
+      <button class="primary" id="cornersOk" type="button">The corners are on the opening's edges: straighten</button>
+      <button id="noStraighten" type="button">Trace on the photo instead</button>
+    </div>
+    <div class="row" id="lineActions" hidden>
+      <button id="addLine" type="button">Add a shelf line</button>
+      <button id="delLine" type="button" disabled>Remove the selected line</button>
+      <button class="primary" id="layoutOk" type="button">Confirm this layout</button>
+    </div>
+  </section>
+
+  <section class="card" id="fillCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="fillTitle">Fill</h2>
+      <button id="fillClose" type="button" class="small">Close</button>
+    </div>
+    <ul class="items" id="fillHave"></ul>
+    <div class="row">
+      <label class="btn primary" id="fillPickLabel" aria-disabled="true">Photograph it<input type="file" id="fillPick" accept="image/*" disabled></label>
+      <span id="fillBusy" class="row muted" hidden><span class="spinner"></span><span>Reading the photo, about 40 seconds…</span></span>
+    </div>
+    <div id="fillNote" class="note" hidden></div>
+    <div class="stage" id="fillStage" hidden><canvas id="fillCv"></canvas></div>
+    <div id="fillList" hidden>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Keep</th><th>What it looks like</th><th>Label</th><th>Count</th><th>Close-up check</th></tr></thead>
+        <tbody id="fillRows"></tbody>
+      </table></div>
+      <div class="row"><button class="primary" id="fillOk" type="button">Put these here</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const KEY = "gp.twin.v1";
+const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it (the person's drop, never automatic)
+let LAYOUTS = [], LAYOUT_SHA = "";
+let twin = null;     // the committed fridge; proposals live in `trace` and `fill` until the person confirms
+
+// ---------- storage: commit = write, read back, compare; only then say "saved" ----------
+function load(){
+  try{ const t = JSON.parse(sessionStorage.getItem(KEY) || "null"); return t && t.v === 1 ? t : null; }catch{ return null; }
+}
+function commit(next){
+  const s = JSON.stringify(next);
+  try{
+    sessionStorage.setItem(KEY, s);
+    if(sessionStorage.getItem(KEY) !== s) throw new Error("readback");
+  }catch{
+    $("#saveState").textContent = "Not saved: this browser refused to store it (private mode or full). Your last saved fridge is unchanged.";
+    return false;
+  }
+  twin = next;
+  $("#saveState").textContent = "Saved in this tab.";
+  return true;
+}
+const clone = o => JSON.parse(JSON.stringify(o));
+
+// ---------- layouts ----------
+function row(key){ return LAYOUTS.find(r => r.key === key); }
+function label(r){
+  if(r.key.startsWith("template:")) return `Generic: ${r.key.slice(9)}`;
+  return `${r.brand || ""} ${r.model || r.key}`.trim();
+}
+function seedLevels(r){  // the template's holders, stable ids from the manifest
+  const levels = {};
+  for(const c of r.compartments) c.levels.forEach((l, i) => levels[l.id] = {comp:c.id, kind:l.kind, top:l.top, floor:l.floor, order:i, from:"template"});
+  for(const p of r.panels) p.pockets.forEach(q => levels[q.id] = {panel:p.id, kind:"pocket", from:"template"});
+  return levels;
+}
+function newTwin(r){
+  return {v:1, key:r.key, version:r.version, layouts:LAYOUT_SHA, levels:seedLevels(r), items:{}, unplaced:[],
+          traced:{}, next:1, rev:{}};
+}
+
+async function init(){
+  try{ const h = await (await fetch("health")).json();
+    $("#status").textContent = h.live ? "Live" : "Paused"; $("#status").className = "chip " + (h.live ? "live" : "off");
+  }catch{ $("#status").textContent = "Offline"; }
+  const txt = await (await fetch("layouts.json")).text();
+  LAYOUTS = JSON.parse(txt);
+  LAYOUT_SHA = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt))))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+  const sel = $("#model");
+  const groups = {"Korean models":[], "Generic":[]};
+  for(const r of LAYOUTS) (r.key.startsWith("template:") ? groups.Generic : groups["Korean models"]).push(r);
+  for(const [g, rs] of Object.entries(groups)){
+    const og = document.createElement("optgroup"); og.label = g;
+    for(const r of rs){ const o = document.createElement("option"); o.value = r.key; o.textContent = label(r); og.append(o); }
+    sel.append(og);
+  }
+  twin = load();
+  if(twin && (!row(twin.key) || twin.layouts !== LAYOUT_SHA)){  // never reinterpret a saved fridge under other data
+    $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
+    $("#modelNote").textContent = "The saved fridge was made with a different layout list. Pick a fridge to start again; the old one stays in this tab until you do.";
+    twin = null;
+  }
+  if(twin){ sel.value = twin.key; render(); }
+  $("#consent").addEventListener("change", gate);
+  gate();
+}
+function gate(){
+  const on = $("#consent").checked;
+  for(const id of ["tracePick", "fillPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+}
+
+$("#model").addEventListener("change", () => showSource());
+function showSource(){
+  const r = row($("#model").value); if(!r) return;
+  $("#modelSource").textContent = (r.key.startsWith("template:") ? "Generic layout. " : "") + "Layout from Glass Pantry's catalogue (" + r.key + "@" + r.version + "); some sizes are estimates. Trace fits it to your fridge.";
+}
+$("#useModel").addEventListener("click", () => {
+  const r = row($("#model").value); if(!r) return;
+  const note = $("#modelNote");
+  if(twin && twin.key === r.key){ render(); return; }
+  const held = twin ? Object.values(twin.items).reduce((n, a) => n + a.length, 0) : 0;
+  if(held){  // a model change never drops things: the person chooses to move them to Unplaced first
+    note.hidden = false; note.className = "note ask";
+    note.innerHTML = `<p></p><div class="row" style="margin-top:8px"><button class="small primary" type="button">Move everything to Unplaced and switch</button><button class="small" type="button">Keep my fridge</button></div>`;
+    note.querySelector("p").textContent = `Your fridge holds ${held} things. Switching keeps them all, in Unplaced.`;
+    const [yes, no] = note.querySelectorAll("button");
+    yes.onclick = () => {
+      const next = newTwin(r);
+      next.unplaced = [...twin.unplaced, ...Object.entries(twin.items).flatMap(([lv, its]) => its.map(it => ({...it, was:lv})))];
+      if(commit(next)){ note.hidden = true; render(); }
+    };
+    no.onclick = () => { note.hidden = true; $("#model").value = twin.key; };
+    return;
+  }
+  note.hidden = true;
+  if(commit(newTwin(r))) render();
+});
+
+// ---------- the fridge drawing ----------
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); if(parent) parent.append(e); return e; }
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function levelsOf(comp){ return Object.entries(twin.levels).filter(([, l]) => l.comp === comp && !l.retired).sort((a, b) => a[1].top - b[1].top); }
+function count(id){ return (twin.items[id] || []).length; }
+
+function render(){
+  const r = row(twin.key);
+  $("#fridgeCard").hidden = false;
+  const svg = $("#fridge"); svg.innerHTML = "";
+  const H = 1000, W = Math.round(H * r.mm[0] / r.mm[1]);
+  const doorPanels = r.panels;
+  const DW = doorPanels.length ? Math.round(W * 0.42) : 0, GAP = 24;
+  const total = W + (doorPanels.length ? GAP + DW * Math.min(2, doorPanels.length) + GAP : 0);
+  svg.setAttribute("viewBox", `-4 -4 ${total + 8} ${H + 40}`);
+  el("rect", {x:0, y:0, width:W, height:H, rx:14, fill:css("--cab"), stroke:css("--line"), "stroke-width":3}, svg);
+  for(const c of r.compartments){
+    const [bx, by, , bw, bh] = c.box_mm;  // fractions of the cabinet; y from the bottom
+    const x = bx * W + 10, y = (1 - by - bh) * H + 10, w = bw * W - 20, h = bh * H - 20;
+    el("rect", {x, y, width:w, height:h, rx:6, fill:css(c.kind === "freezer" ? "--freezer" : "--cold"), stroke:css("--line"), "stroke-width":2}, svg);
+    const t = twin.traced[c.id];
+    const tag = el("text", {x:x + 8, y:y + 22, "font-size":18, fill:css("--muted"), "font-family":"system-ui"}, svg);
+    tag.textContent = `${c.name.en}${t ? (t.mode === "straightened" ? " · traced" : " · traced on photo, unverified") : " · catalogue template"}`;
+    const lv = levelsOf(c.id);
+    if(!lv.length){
+      const tx = el("text", {x:x + 8, y:y + h / 2, "font-size":16, fill:css("--muted")}, svg); tx.textContent = "(no shelves in this compartment)";
+    }
+    for(const [id, l] of lv){
+      const g = el("g", {class:"lvl", tabindex:0, role:"button", "aria-label":`${c.name.en} ${l.kind} ${l.order + 1}: ${count(id)} things`}, svg);
+      const ly = y + 30 + l.top * (h - 34), lh = (l.floor - l.top) * (h - 34);
+      el("rect", {x:x + 6, y:ly + 2, width:w - 12, height:Math.max(8, lh - 4), rx:4, fill:"transparent", stroke:css("--line"), "stroke-width":1.5}, g);
+      el("line", {x1:x + 6, x2:x + w - 6, y1:ly + lh, y2:ly + lh, stroke:css(l.kind === "drawer" ? "--grey" : "--accent"), "stroke-width":l.kind === "drawer" ? 2 : 4}, g);
+      const n = count(id);
+      const tx = el("text", {x:x + 14, y:ly + Math.min(lh - 8, 26), "font-size":16, fill:css("--fg")}, g);
+      tx.textContent = `${l.kind === "drawer" ? "Drawer" : "Shelf"} ${l.order + 1}${l.from === "added" ? " (added)" : ""}${n ? ` · ${n}` : ""}`;
+      const its = (twin.items[id] || []).slice(0, Math.max(0, Math.floor((lh - 34) / 18)));
+      its.forEach((it, i) => { const s = el("text", {x:x + 14, y:ly + 44 + i * 18, "font-size":13, fill:css("--muted")}, g); s.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; });
+      g.onclick = () => openFill(id); g.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openFill(id); } };
+    }
+  }
+  doorPanels.forEach((p, i) => {  // door bins drawn beside the cabinet, at their template positions
+    const col = i % 2, x = W + GAP + col * DW, [, pv, , ph] = p.rect;
+    const y = (1 - pv - ph) * H, h = ph * H;
+    el("rect", {x, y, width:DW - 8, height:h, rx:8, fill:css("--door"), stroke:css("--line"), "stroke-width":2}, svg);
+    const t = el("text", {x:x + 6, y:y + 18, "font-size":14, fill:css("--muted")}, svg); t.textContent = `${p.id} door (template positions)`;
+    p.pockets.forEach((q, k) => {
+      const qy = y + (1 - q.bottom - q.height) * h + 24, qh = q.height * h - 28;
+      const g = el("g", {class:"lvl", tabindex:0, role:"button", "aria-label":`door bin ${q.id}: ${count(q.id)} things`}, svg);
+      el("rect", {x:x + 8 + q.u * (DW - 24), y:qy, width:q.w * (DW - 24), height:Math.max(10, qh), rx:4, fill:"transparent", stroke:css("--accent"), "stroke-width":2}, g);
+      const s = el("text", {x:x + 14, y:qy + 18, "font-size":13, fill:css("--fg")}, g);
+      s.textContent = `Bin ${k + 1}${count(q.id) ? " · " + count(q.id) : ""}`;
+      g.onclick = () => openFill(q.id); g.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openFill(q.id); } };
+    });
+  });
+  const tb = $("#traceButtons"); tb.innerHTML = "";
+  for(const c of r.compartments){
+    if(!c.levels.length && !twin.traced[c.id]) continue;
+    const b = document.createElement("button"); b.type = "button"; b.className = "small";
+    b.textContent = `Trace ${c.name.en.toLowerCase()}`; b.onclick = () => openTrace(c.id); tb.append(b);
+  }
+  $("#unplacedBox").hidden = !twin.unplaced.length;
+  const ul = $("#unplaced"); ul.innerHTML = "";
+  for(const it of twin.unplaced){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); }
+}
+
+// ---------- photos ----------
+function shrink(file, long = 3024){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => b ? res(b) : rej(new Error("encode")), "image/jpeg", 0.9);
+    };
+    img.onerror = () => rej(new Error("decode"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+const b64 = blob => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result.split(",")[1]); f.readAsDataURL(blob); });
+const UNREADABLE = "This browser could not open that photo. Please choose a JPEG (on iPhone: Settings > Camera > Formats > Most Compatible).";
+
+// ---------- trace: corners -> straighten -> lines -> confirm ----------
+let trace = null;  // {comp, gen, photo(b64), source, size, img, corners, kind, mode, warped, matrix, targets, lines, sel}
+let gen = 0;
+
+function openTrace(comp){
+  const c = row(twin.key).compartments.find(c => c.id === comp);
+  trace = {comp, gen:++gen};
+  $("#traceCard").hidden = false; $("#fillCard").hidden = true;
+  $("#traceTitle").textContent = `Trace: ${c.name.en}`;
+  for(const id of ["#traceNote", "#traceStage", "#cornerActions", "#lineActions"]) $(id).hidden = true;
+  $("#traceCard").scrollIntoView({behavior:"smooth", block:"start"});
+}
+$("#traceClose").onclick = () => { trace = null; gen++; $("#traceCard").hidden = true; };
+function traceNote(text, kind = ""){ const n = $("#traceNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
+
+$("#tracePick").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f || !trace) return;
+  const my = trace.gen; traceNote(""); $("#traceBusy").hidden = false;
+  try{
+    const blob = await shrink(f, 1568);
+    const photo = await b64(blob);
+    const r = await fetch("straighten", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({photo})});
+    const body = await r.json();
+    if(!trace || my !== trace.gen) return;
+    if(!r.ok){ traceNote(body.message || "The engine said: " + body.error, "bad"); return; }
+    const img = await loadImg(URL.createObjectURL(blob));
+    if(!trace || my !== trace.gen) return;
+    if(img.naturalWidth !== body.size[0] || img.naturalHeight !== body.size[1]){  // the trace must sit on these pixels
+      traceNote("The photo's size changed on the way; please choose it again.", "bad"); return;
+    }
+    Object.assign(trace, {photo, source:body.source, size:body.size, img, corners:body.corners, kind:body.suggestion, mode:"corners"});
+    traceNote(body.suggestion === "contour"
+      ? "Dashed corners: OpenCV's suggestion, not checked. Drag each one onto a corner of the opening."
+      : "OpenCV found no opening to suggest. Drag each corner onto a corner of the opening.", "ask");
+    $("#traceStage").hidden = false; $("#cornerActions").hidden = false; $("#lineActions").hidden = true;
+    drawTrace();
+  }catch(err){ if(trace && my === trace.gen) traceNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(trace && my === trace.gen) $("#traceBusy").hidden = true; }
+});
+function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("decode")); i.src = src; }); }
+
+$("#cornersOk").onclick = async () => {
+  if(!trace) return;
+  const my = trace.gen; $("#traceBusy").hidden = false;
+  try{
+    const r = await fetch("straighten", {method:"POST", headers:{"content-type":"application/json"},
+      body:JSON.stringify({photo:trace.photo, corners:trace.corners, source:trace.source})});
+    const body = await r.json();
+    if(!trace || my !== trace.gen) return;
+    if(!r.ok){ traceNote((body.message || body.error) + (body.reason ? ` (${body.reason.replaceAll("_", " ")})` : ""), "bad"); return; }
+    const img = await loadImg("data:image/jpeg;base64," + body.image);
+    if(!trace || my !== trace.gen) return;
+    Object.assign(trace, {mode:"straightened", warped:img, matrix:body.matrix, targets:body.targets, confirmedCorners:clone(trace.corners)});
+    startLines();
+    traceNote("Straightened to a front view of the opening (shelves set back from it may sit slightly off). Drag the lines onto your shelves; green marks are edges OpenCV sees. A line dropped near a mark lands on it.", "ok");
+  }catch{ if(trace && my === trace.gen) traceNote("The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(trace && my === trace.gen) $("#traceBusy").hidden = true; }
+};
+$("#noStraighten").onclick = () => {
+  if(!trace) return;
+  Object.assign(trace, {mode:"unstraightened", warped:trace.img, matrix:null, targets:[]});
+  startLines();
+  traceNote("Tracing on the photo itself: not straightened and not verified. Drag the lines onto your shelves.", "ask");
+};
+function startLines(){  // interior boundaries between the compartment's current levels
+  const lv = levelsOf(trace.comp);
+  trace.lines = lv.slice(0, -1).map(([id, l]) => ({y:l.floor, id}));
+  trace.sel = -1;
+  $("#cornerActions").hidden = true; $("#lineActions").hidden = false; $("#delLine").disabled = true;
+  drawTrace();
+}
+
+function drawTrace(){
+  const cv = $("#traceCv"), ctx = cv.getContext("2d");
+  const lw = () => Math.max(2, cv.width / 300);
+  if(trace.mode === "corners"){
+    cv.width = trace.img.naturalWidth; cv.height = trace.img.naturalHeight;
+    ctx.drawImage(trace.img, 0, 0);
+    const q = trace.corners;
+    ctx.strokeStyle = css("--ask"); ctx.lineWidth = lw(); ctx.setLineDash([lw() * 4, lw() * 3]);
+    ctx.beginPath(); q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    for(const [x, y] of q){ ctx.fillStyle = css("--ask"); ctx.beginPath(); ctx.arc(x, y, lw() * 6, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = lw(); ctx.stroke(); }
+    return;
+  }
+  const img = trace.warped;
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+  for(const t of trace.targets){ ctx.fillStyle = css("--ok"); ctx.fillRect(0, t * cv.height - lw(), cv.width * 0.06, lw() * 2); ctx.fillRect(cv.width * 0.94, t * cv.height - lw(), cv.width * 0.06, lw() * 2); }
+  trace.lines.forEach((l, i) => {
+    ctx.strokeStyle = i === trace.sel ? css("--bad") : css("--accent"); ctx.lineWidth = lw() * (i === trace.sel ? 2.2 : 1.6);
+    ctx.beginPath(); ctx.moveTo(0, l.y * cv.height); ctx.lineTo(cv.width, l.y * cv.height); ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(cv.width * 0.5, l.y * cv.height, lw() * 5, 0, 7); ctx.fill();
+  });
+}
+
+// one pointer handler for corners and lines (mouse, pen and touch)
+(() => {
+  const cv = $("#traceCv"); let drag = null;
+  const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  cv.addEventListener("pointerdown", e => {
+    if(!trace || !trace.mode) return;
+    const [x, y] = at(e), reach = cv.width / 14;
+    if(trace.mode === "corners"){
+      let best = -1, d = reach;
+      trace.corners.forEach(([cx, cy], i) => { const k = Math.hypot(cx - x, cy - y); if(k < d){ d = k; best = i; } });
+      if(best >= 0){ drag = {corner:best}; cv.setPointerCapture(e.pointerId); }
+      return;
+    }
+    let best = -1, d = reach;
+    trace.lines.forEach((l, i) => { const k = Math.abs(l.y * cv.height - y); if(k < d){ d = k; best = i; } });
+    trace.sel = best; $("#delLine").disabled = best < 0;
+    if(best >= 0){ drag = {line:best}; cv.setPointerCapture(e.pointerId); }
+    drawTrace();
+  });
+  cv.addEventListener("pointermove", e => {
+    if(!drag) return;
+    const [x, y] = at(e);
+    if(drag.corner !== undefined) trace.corners[drag.corner] = [Math.max(0, Math.min(cv.width, x)), Math.max(0, Math.min(cv.height, y))];
+    else trace.lines[drag.line].y = Math.max(0.01, Math.min(0.99, y / cv.height));
+    drawTrace();
+  });
+  const up = () => {
+    if(drag && drag.line !== undefined){
+      const l = trace.lines[drag.line];
+      const t = trace.targets.reduce((b, t) => Math.abs(t - l.y) < Math.abs(b - l.y) ? t : b, Infinity);
+      if(Math.abs(t - l.y) <= SNAP) l.y = t;
+      drawTrace();
+    }
+    drag = null;
+  };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+})();
+$("#addLine").onclick = () => { if(!trace || !trace.lines) return; trace.lines.push({y:0.5, id:null}); trace.sel = trace.lines.length - 1; $("#delLine").disabled = false; drawTrace(); };
+$("#delLine").onclick = () => { if(!trace || trace.sel < 0) return; trace.lines.splice(trace.sel, 1); trace.sel = -1; $("#delLine").disabled = true; drawTrace(); };
+
+$("#layoutOk").onclick = () => {
+  if(!trace || !trace.lines) return;
+  const ys = trace.lines.map(l => l.y).sort((a, b) => a - b);
+  if(ys.some((y, i) => i && y - ys[i - 1] < 0.03)){ traceNote("Two lines are almost on top of each other. Move or remove one.", "bad"); return; }
+  const bounds = [0, ...ys, 1];
+  const next = clone(twin);
+  const old = levelsOf(trace.comp);  // matched top to bottom by order; extra old ones retire, extra new ones are added
+  const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
+  const moved = [];
+  for(let i = 0; i < bounds.length - 1; i++){
+    let id;
+    if(i < old.length) id = old[i][0];
+    else { id = `${trace.comp}/N${next.next++}`; next.levels[id] = {comp:trace.comp, kind:"shelf", from:"added"}; }
+    Object.assign(next.levels[id], {top:bounds[i], floor:bounds[i + 1], order:i});
+    delete next.levels[id].retired;
+  }
+  for(const [id] of old.slice(bounds.length - 1)){  // a removed level keeps its things, in Unplaced
+    next.levels[id].retired = true;
+    for(const it of next.items[id] || []) moved.push({...it, was:id});
+    delete next.items[id];
+  }
+  next.unplaced.push(...moved);
+  next.traced[trace.comp] = {mode:trace.mode, source:trace.source, size:trace.size, corners:trace.confirmedCorners || null,
+    matrix:trace.matrix, levels:bounds.length - 1, template:tmpl.length, at:Date.now()};
+  next.rev[trace.comp] = (next.rev[trace.comp] || 0) + 1;  // any scan answering for the old layout is refused
+  if(!commit(next)) return;
+  const same = bounds.length - 1 === tmpl.length;
+  traceNote(`Saved: ${bounds.length - 1} levels. ${same ? "Agrees with the catalogue template's count." : `Differs from the catalogue template (${tmpl.length}).`}${moved.length ? ` ${moved.length} things moved to Unplaced.` : ""}`, "ok");
+  $("#lineActions").hidden = true;
+  render();
+};
+
+// ---------- fill: one level from one photo (the existing scan), then the person confirms ----------
+let fill = null;  // {level, gen, rev, res}
+function holderName(id){
+  const l = twin.levels[id]; if(!l) return id;
+  if(l.kind === "pocket") return `door bin ${id}`;
+  const c = row(twin.key).compartments.find(c => c.id === l.comp);
+  return `${c.name.en}, ${l.kind} ${l.order + 1}`;
+}
+function compOf(id){ const l = twin.levels[id]; return l && (l.comp || l.panel); }
+function openFill(id){
+  fill = {level:id, gen:++gen, rev:twin.rev[compOf(id)] || 0};
+  $("#fillCard").hidden = false; $("#traceCard").hidden = true; trace = null;
+  $("#fillTitle").textContent = `Fill: ${holderName(id)}`;
+  const ul = $("#fillHave"); ul.innerHTML = "";
+  for(const it of twin.items[id] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); }
+  for(const s of ["#fillNote", "#fillStage", "#fillList"]) $(s).hidden = true;
+  $("#fillCard").scrollIntoView({behavior:"smooth", block:"start"});
+}
+$("#fillClose").onclick = () => { fill = null; gen++; $("#fillCard").hidden = true; };
+function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
+
+$("#fillPick").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
+  const my = fill.gen; fillNote(""); $("#fillList").hidden = true; $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
+  try{
+    const blob = await shrink(f);
+    const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
+    const body = await r.json();
+    if(!fill || my !== fill.gen) return;
+    if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
+    fill.res = body;
+    showScan(body, URL.createObjectURL(blob), my);
+  }catch(err){ if(fill && my === fill.gen) fillNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(fill && my === fill.gen) $("#fillBusy").hidden = true; }
+});
+
+const WHY = {"photo:blurry":"The photo is out of focus.", "photo:shake":"The photo is smeared by movement.",
+  "photo:dark":"The photo is too dark to read labels.", "photo:blown":"Glare hides part of the shelf.",
+  "nothing_read":"Nothing was read. Is it empty?", "model_unreadable":"The reading could not be used. Try again."};
+function why(code){
+  if(WHY[code]) return WHY[code];
+  const [k, v] = code.split(":");
+  if(k === "shelf_unconfirmed") return `A shelf edge the photo does not show (at ${Math.round(v * 100)}%).`;
+  if(k === "label_conflict") return `The close-up label for ${v} differs from the first reading.`;
+  if(k === "count_conflict") return `The close-up count for ${v} differs from the first count.`;
+  return code;
+}
+function showScan(res, url, my){
+  const action = {file:"Every check agrees.", ask:"Please check the marked rows.", retake:"Take a new photo: it failed the quality check, so no model was called."}[res.action] || res.action;
+  fillNote([action, ...(res.why || []).map(why)].join(" "), res.action === "file" ? "ok" : res.action === "ask" ? "ask" : "bad");
+  // the photo with the item boxes
+  const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = new Image();
+  const fr = (res.trace || []).find(s => s.step === "frames");
+  img.onload = () => {
+    if(!fill || my !== fill.gen) return;
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+    const k = fr ? img.naturalWidth / fr.size[0] : 1, lw = Math.max(2, cv.width / 400);
+    for(const it of (res.proposal && res.proposal.items) || []){ const b = it.box; if(!Array.isArray(b)) continue;
+      ctx.strokeStyle = "#4aa3df"; ctx.lineWidth = lw; ctx.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k); }
+    $("#fillStage").hidden = false;
+  };
+  img.src = url;
+  const items = (res.proposal && res.proposal.items) || [];
+  if(res.action === "retake" || !items.length) return;
+  const obs = {}; for(const o of (res.zoom && res.zoom.observations) || []) (obs[o.item_id] ||= []).push(o);
+  const tb = $("#fillRows"); tb.innerHTML = "";
+  for(const it of items){
+    const os = obs[it.id] || [], lab = os.find(o => o.field === "label"), cnt = os.find(o => o.field === "quantity");
+    const tr = document.createElement("tr"); tr.dataset.id = it.id; tr.dataset.appearance = it.appearance || "";
+    tr.innerHTML = `<td><input type="checkbox" checked aria-label="Keep"></td><td></td><td><input></td><td class="q"><input inputmode="numeric"></td><td></td>`;
+    tr.children[1].textContent = it.appearance || "";
+    tr.children[2].querySelector("input").value = lab ? (lab.effective ?? "") : (it.label ?? "");
+    tr.children[3].querySelector("input").value = cnt ? (cnt.effective ?? "") : (it.quantity ?? "");
+    for(const o of os){
+      const t = document.createElement("div"); t.style.display = "grid"; t.style.gap = "4px";
+      const tag = document.createElement("span"); tag.className = "tag t-" + o.outcome; tag.textContent = `${o.field === "quantity" ? "count" : "label"}: ${o.outcome}`; t.append(tag);
+      if(o.outcome === "conflict" || o.outcome === "provisional"){
+        const opts = document.createElement("div"); opts.className = "row";
+        for(const [name, v] of [["first", o.full], ["close-up", o.crop]]){ if(v === null || v === undefined) continue;
+          const b = document.createElement("button"); b.type = "button"; b.className = "small"; b.textContent = `${name}: ${v}`;
+          b.onclick = () => { tr.children[o.field === "quantity" ? 3 : 2].querySelector("input").value = v; }; opts.append(b); }
+        t.append(opts);
+      }
+      tr.children[4].append(t);
+    }
+    tb.append(tr);
+  }
+  $("#fillList").hidden = false;
+}
+
+$("#fillOk").onclick = () => {
+  if(!fill || !fill.res) return;
+  const lv = twin.levels[fill.level];
+  // the answer must still belong to this level, this layout and this photo
+  if(!lv || lv.retired || (twin.rev[compOf(fill.level)] || 0) !== fill.rev){
+    fillNote("This shelf changed while the photo was read (re-traced or removed). Nothing was added; photograph it again.", "bad"); return;
+  }
+  const source = fill.res.proposal && fill.res.proposal.source;
+  const add = [...document.querySelectorAll("#fillRows tr")].filter(tr => tr.children[0].querySelector("input").checked).map(tr => ({
+    appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
+    count:Math.max(1, parseInt(tr.children[3].querySelector("input").value, 10) || 1), source, at:Date.now()}));
+  const next = clone(twin);
+  next.items[fill.level] = [...(next.items[fill.level] || []), ...add];  // a scan adds; it never removes
+  if(!commit(next)) return;
+  fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
+  $("#fillList").hidden = true; fill.res = null;
+  openFillKeep();
+  render();
+};
+function openFillKeep(){ const ul = $("#fillHave"); ul.innerHTML = "";
+  for(const it of twin.items[fill.level] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); } }
+
+init().then(showSource).catch(() => { $("#status").textContent = "Offline"; });
+</script>
+</body>
+</html>
