@@ -275,6 +275,7 @@ def test_the_contour_search_stops_when_told():
 def test_time_running_out_inside_the_encoding_starts_no_targets(monkeypatch, capsys):
     img, q = opening_photo()
     corners, source, _ = canonical_corners(img, q)
+    event = ev({"photo": jpeg(img), "corners": corners, "source": source})  # encoded before the clock is rigged
     clock = Clock()
     monkeypatch.setattr(h.time, "monotonic", clock)
     real = cv2.imencode
@@ -285,7 +286,7 @@ def test_time_running_out_inside_the_encoding_starts_no_targets(monkeypatch, cap
     monkeypatch.setattr(cv2, "imencode", slow_encode)
     monkeypatch.setattr(op, "snap_targets", lambda *a, **k: pytest.fail("no targets after the budget"))
     capsys.readouterr()
-    r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
+    r = h.handler(event, Ctx(10_000), is_enabled=lambda: True)
     assert r["statusCode"] == 503 and "straightened" not in capsys.readouterr().out
 
 
