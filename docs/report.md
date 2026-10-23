@@ -215,8 +215,8 @@ questions.
 ## 8. Responsible use
 - **Live photos:** the live handler processes uploaded photos in memory and does not intentionally keep their
   images or readings. Photos sent for reading are also sent to Anthropic; our implementation does not set
-  Anthropic's retention policy. Application logs omit images, crops, labels and model text. The page says this
-  before any upload and asks for consent.
+  Anthropic's retention policy. Application logs omit images, crops, labels and model text. Before live uploads, the
+  page discloses AWS/Anthropic processing and requests consent.
 - **The recorded example:** separately, the server stores and publicly serves one recorded development example (a
   photo of the owner's fridge and its readings), published with the owner's approval.
 - **People decide:** nothing is kept without a person's confirmation; the engine recommends asking when its

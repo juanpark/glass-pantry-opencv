@@ -14,7 +14,9 @@ digraph loop {
   decide  [label="DECIDE\nreasons accumulate; incomplete first reading → ask", shape=diamond, style="filled", fillcolor="#ffffff", fontsize=11];
   retake  [label="RECOMMEND: retake\n(no model call spent)", fillcolor="#fde8e4", color="#b0413e"];
   ask     [label="RECOMMEND: ask\n(both readings shown; is this shelf line real?)", fillcolor="#fff4d6", color="#8a5a00"];
-  file    [label="RECOMMEND: file\nperson confirms → twin", fillcolor="#e3f0eb"];
+  file    [label="RECOMMEND: file", fillcolor="#e3f0eb"];
+  person  [label="Person reviews, edits and confirms the list", fillcolor="#f6f3fb", color="#6b5a8a"];
+  store   [label="Browser stores the confirmed rows (the twin)", fillcolor="#f6f3fb", color="#6b5a8a"];
   skip    [label="left unresolved\n(below the sharpness threshold)", fillcolor="#eeeeee", color="#888888", fontsize=10];
 
   photo -> gate;
@@ -25,7 +27,7 @@ digraph loop {
   pick -> skip [label=" too blurry", style=dashed];
   decide -> ask [label=" disagreement or\n unconfirmed shelf"];
   decide -> file [label=" no blocking issue\n detected"];
-  ask -> file [label=" person answers", color="#1f6f5c"];
+  ask -> person; file -> person; person -> store [color="#1f6f5c"];
   { rank=same; retake; read; }
   { rank=same; ask; file; }
 }
