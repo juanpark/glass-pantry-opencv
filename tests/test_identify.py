@@ -137,3 +137,62 @@ def test_the_page_offers_a_photo_pick_that_selects_but_never_switches():
     i = page.index('$("#identifyPick")')
     body = page[i:page.index("\n});", i)]
     assert 'fetch("identify"' in body and "switchTo(" not in body and "replaceModel(" not in body
+
+
+# ---- Codex R1 ----
+
+@pytest.mark.parametrize("text", [
+    '[{"model_code": "RB38J7200S4", "brand": "Samsung", "kind": "bottom_freezer"}]',
+    'Here it is: {"model_code": "RB38J7200S4", "brand": "Samsung", "kind": "bottom_freezer"}',
+    '{"model_code": "RB38J7200S4", "kind": "bottom_freezer"} {"model_code": "RS84DG5002M9", "kind": "side_by_side"}',
+    '{"model_code": "RB38J7200S4", "kind": "bottom_freezer"} trailing',
+])
+def test_anything_but_exactly_one_json_object_is_no_reading(monkeypatch, text):
+    from verifier import claude
+    monkeypatch.setattr(claude, "call", lambda *a, **k: {"text": text, "stop": "end_turn", "cost": 0.01,
+                                                         "request_id": "r", "ms": 1, "in": 1, "out": 1})
+    res = h.identify_photo(real_jpeg(), "k")
+    assert res["reading"] is None and res["suggestions"] == []
+
+
+def test_one_object_in_a_json_code_fence_is_still_one_object():
+    r = I.read_answer('```json\n{"model_code": "RB38J7200S4", "kind": "bottom_freezer"}\n```', "end_turn")
+    assert r["model_code"] == "RB38J7200S4"
+
+
+def test_an_unknown_suffix_is_kept_so_it_is_not_an_exact_match():
+    assert I.norm_code("RB38J7200S4/EF") == "RB38J7200S4"
+    assert I.norm_code("RB38J7200S4/UNRECOGNIZED") != "RB38J7200S4"
+    s = I.suggest({"model_code": "RB38J7200S4/UNRECOGNIZED", "brand": "Samsung", "kind": "bottom_freezer"}, ROWS)
+    assert all(x["match"] != "exact" for x in s)
+
+
+def test_a_conflicting_maker_is_never_an_exact_or_family_match():
+    s = I.suggest({"model_code": "RB38J7200S4", "brand": "LG", "kind": "bottom_freezer"}, ROWS)
+    assert all(x["match"] == "kind" for x in s) and s[0]["key"] == "template:standard"
+    s = I.suggest({"model_code": "RB38J7200S4", "brand": "Bosch", "kind": None}, ROWS)  # unknown maker: no conflict known
+    assert s[0]["match"] == "exact"
+
+
+def test_a_fridge_switch_finishes_the_identify_spinner():
+    from pathlib import Path
+    page = (Path(__file__).resolve().parent.parent / "web" / "fridge.html").read_text(encoding="utf-8")
+    i = page.index("function switchTo(r){")
+    body = page[i:page.index("\n}", i)]
+    assert body.index("ops.cancel()") < body.index('$("#identifyBusy").hidden = true')
+
+
+def test_a_blurry_photo_is_sent_back_by_the_opencv_gate_before_any_allowance_or_model_call(capsys):
+    import cv2
+    from verifier import frames
+    img = cv2.GaussianBlur(frames.decode(real_jpeg()), (0, 0), 8)
+    blurry = cv2.imencode(".jpg", img)[1].tobytes()
+    s, b = ident(ev("POST", "/identify", blurry), admitter=lambda: pytest.fail("not counted"),
+                 identifier=lambda j, k, **_: pytest.fail("no model call"))
+    assert s == 422 and b["error"] == "retake" and "blurry" in b["reasons"] and "message" in b
+    assert '"result": "retake"' in capsys.readouterr().out
+
+
+def test_a_sharp_photo_passes_the_gate_and_is_read():
+    s, b = ident(ev("POST", "/identify", real_jpeg()))
+    assert s == 200

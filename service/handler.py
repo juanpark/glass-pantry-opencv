@@ -116,7 +116,23 @@ def identify_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict
             "model_calls": 1, "cost_usd": r["cost"], "mode": "LIVE"}
 
 
-def _admitted(event, route, is_enabled, admitter):
+RETAKE = {"blurry": "The photo is blurry. Hold the phone still, tap to focus on the sticker, and try again.",
+          "shake": "The photo is smeared by movement. Hold the phone still and try again.",
+          "dark": "The photo is too dark to read. Turn on a light or move closer to it.",
+          "blown": "Glare hides part of the photo. Tilt the phone a little and try again."}
+
+
+def _gate(jpeg, route):
+    """OpenCV's photo gate before any allowance or model call: a photo it cannot read is sent back, free."""
+    from verifier import frames, gate
+    g = gate.check(frames.canonical(jpeg).image)
+    if g.passed:
+        return None
+    _log(route=route, result="retake", reasons=g.reasons)
+    return _resp(422, {"error": "retake", "reasons": g.reasons, "message": " ".join(RETAKE[r] for r in g.reasons)})
+
+
+def _admitted(event, route, is_enabled, admitter, pre=None):
     """The guards every model route shares, in order: switch, size, a readable photo, then one admission from the
     daily cap (fail closed). Returns (jpeg, None) or (None, response)."""
     if not is_enabled():
@@ -130,6 +146,9 @@ def _admitted(event, route, is_enabled, admitter):
     from verifier.frames import decode
     if decode(jpeg) is None:  # not a photo: refused before it uses any of today's allowance
         return None, _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
+    refused = pre(jpeg, route) if pre else None
+    if refused:
+        return None, refused
     try:
         ok = admitter()
     except Exception as e:  # the counter cannot be read: fail closed, never call the model uncounted
@@ -254,7 +273,7 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, res)
     if method == "POST" and path == "/identify":
         t0 = time.time()
-        jpeg, refused = _admitted(event, "identify", is_enabled, admitter)
+        jpeg, refused = _admitted(event, "identify", is_enabled, admitter, pre=_gate)
         if refused:
             return refused
         deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None

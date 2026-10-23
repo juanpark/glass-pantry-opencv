@@ -16,6 +16,7 @@ KIND_EN = {"bottom_freezer": "fridge on top, freezer below", "top_freezer": "fre
            "kimchi_stand": "a standing kimchi fridge", "kimchi_chest": "a chest (lid) kimchi fridge"}
 BRANDS = {"삼성": "samsung", "samsung": "samsung", "lg": "lg", "엘지": "lg", "위니아": "winia", "winia": "winia",
           "딤채": "winia", "dimchae": "winia"}
+SUFFIXES = {"EF", "EU"}  # market suffixes after a slash that do not change the model (RB38J7215SA/EF); others are kept
 FAMILY = 7  # characters of shared code prefix that make a sibling (RB38J72… ~ RB38J72…); RB3… is not enough
 
 PROMPT = """This photo shows a refrigerator, a kimchi refrigerator, or the rating sticker / label of one.
@@ -64,8 +65,9 @@ def kind_of(r: dict) -> str:
 def norm_code(s) -> str | None:
     if not isinstance(s, str):
         return None
-    s = s.split("/")[0]
     s = re.sub(r"[\s\-_.]", "", s).upper()
+    base, _, suffix = s.partition("/")
+    s = base if suffix in SUFFIXES else s
     return s or None
 
 
@@ -98,10 +100,12 @@ def suggest(reading: dict, rows: list[dict]) -> list[dict]:
 
     models = [r for r in rows if not r["key"].startswith("template:")]
     if code:
-        for r in models:
+        # a maker we know that differs from the row's means a misread code or a mislabelled sticker: never "exact"
+        models_ok = [r for r in models if not (brand and brand_of(r.get("brand")) and brand_of(r.get("brand")) != brand)]
+        for r in models_ok:
             if code_of(r) == code:
                 add(r, "exact", f"The model number {code} matches {_name(r)}.")
-        for r in models:
+        for r in models_ok:
             c = code_of(r)
             if c and brand and brand_of(r.get("brand")) == brand and len(_prefix(c, code)) >= FAMILY:
                 add(r, "family", f"{code} is not in the list, but {c} is the same family ({_prefix(c, code)}…).")
@@ -135,9 +139,13 @@ def read_answer(text: str, stop: str) -> dict | None:
     are dropped, never coerced."""
     if stop != "end_turn":
         return None
-    from .claude import parse_object
-    v = parse_object(text or "")
-    if v is None:
+    t = (text or "").strip()
+    fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", t, re.S)  # one object in a code fence is still one object
+    try:
+        v = json.loads(fence.group(1) if fence else t)
+    except ValueError:
+        return None  # prose around it, a second object, trailing text: not one object
+    if not isinstance(v, dict):
         return None
     s = lambda k: v.get(k).strip() if isinstance(v.get(k), str) and v.get(k).strip() else None
     kind = v.get("kind") if v.get("kind") in KINDS else "unknown"

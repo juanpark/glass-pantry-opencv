@@ -272,6 +272,7 @@ function switchTo(r){  // a new fridge keeps everything the old one(s) held, in 
   const next = T.replaceModel([twin, stale], r, LAYOUT_SHA);
   if(!commit(next)) return;
   stale = null; ops.cancel(); trace = null; fill = null;
+  $("#identifyBusy").hidden = true;  // a read still in flight is stale now; its answer is ignored
   $("#traceCard").hidden = true; $("#fillCard").hidden = true; $("#modelNote").hidden = true;
   render();
 }
