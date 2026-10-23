@@ -1,0 +1,197 @@
+// node --test tests/js/   (TWIN=path/to/module.js to run against another implementation)
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {pathToFileURL, fileURLToPath} from "node:url";
+import path from "node:path";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const T = await import(pathToFileURL(process.env.TWIN || path.join(here, "../../web/twin.js")).href);
+const ROWS = JSON.parse(readFileSync(path.join(here, "../../web/layouts/layouts.json"), "utf8"));
+const A = ROWS.find(r => r.key === "model:samsung-rb38j-bottom");
+const B = ROWS.find(r => r.key === "template:standard");
+let seq = 0;
+const rnd = () => (++seq) / 1000;
+
+class Mem {  // a storage double whose faults are switched on per test
+  constructor() { this.m = new Map(); this.failSet = false; this.failGet = false; this.lie = false; this.failRestore = false; this.sets = 0; }
+  getItem(k) {  // with `lie`, the first read after a write returns something else (a corrupted read-back)
+    if (this.failGet) throw new Error("get");
+    const v = this.m.has(k) ? this.m.get(k) : null;
+    if (this.lieNext) { this.lieNext = false; return v + " "; }
+    return v;
+  }
+  setItem(k, v) {
+    this.sets++;
+    if (this.failSet || (this.failRestore && this.sets > 1)) throw new Error("quota");
+    this.m.set(k, v);
+    if (this.lie) this.lieNext = true;
+  }
+  removeItem(k) { this.m.delete(k); }
+}
+
+const thing = (n, more = {}) => ({appearance: n, label: null, count: 1, source: "s", ...more});
+
+// ---- finding 1: Unplaced survives every model change ----
+test("switching with only Unplaced things keeps them", () => {
+  const a = {...T.newTwin(A, "h", rnd), unplaced: [thing("eggs", {count: 6})]};
+  const b = T.replaceModel(a, B, "h", rnd);
+  assert.deepEqual(b.unplaced.map(i => [i.appearance, i.count]), [["eggs", 6]]);
+});
+
+test("switching with placed and Unplaced things keeps all, with where they were", () => {
+  const a = {...T.newTwin(A, "h", rnd), unplaced: [thing("kimchi")], items: {"cold/L0": [thing("milk")], "cold/L1": [thing("jam")]}};
+  const b = T.replaceModel(a, B, "h", rnd);
+  assert.deepEqual(b.unplaced.map(i => i.appearance + "@" + (i.was ?? "")), ["kimchi@", "milk@cold/L0", "jam@cold/L1"]);
+});
+
+test("consecutive switches lose nothing, and a stale saved fridge is carried too", () => {
+  const a = {...T.newTwin(A, "old", rnd), items: {"cold/L0": [thing("milk")]}};
+  const stale = {...T.newTwin(A, "older", rnd), unplaced: [thing("tofu")]};
+  const b = T.replaceModel([a, stale], B, "h", rnd);
+  const c = T.replaceModel(b, A, "h", rnd);
+  const d = T.replaceModel(c, B, "h", rnd);
+  assert.deepEqual(d.unplaced.map(i => i.appearance).sort(), ["milk", "tofu"]);
+});
+
+test("a model change survives the storage round trip", () => {
+  const st = new Mem();
+  const a = {...T.newTwin(A, "h", rnd), unplaced: [thing("eggs", {count: 6, label: "계란"})]};
+  assert.equal(T.commit(st, T.KEY, a).ok, true);
+  const b = T.replaceModel(JSON.parse(st.getItem(T.KEY)), B, "h", rnd);
+  assert.equal(T.commit(st, T.KEY, b).ok, true);
+  assert.deepEqual(JSON.parse(st.getItem(T.KEY)).unplaced, a.unplaced);
+});
+
+// ---- finding 2: answers are bound to fridge, holder and layout revision ----
+test("an answer asked for one fridge is refused by another with the same holder ids", () => {
+  const a = T.newTwin(A, "h", rnd);
+  const t = T.ticket(a, "cold/L0");
+  const b = T.replaceModel(a, A, "h", rnd);  // same model again: same ids, new fridge
+  assert.equal(T.addItems(b, t, [thing("milk")]).error, "other_fridge");
+});
+
+test("an answer for a re-traced compartment or a removed level is refused", () => {
+  const a = T.newTwin(A, "h", rnd);
+  const t0 = T.ticket(a, "cold/L0"), t4 = T.ticket(a, "cold/L4");
+  const {next} = T.applyTrace(a, "cold", [0.2, 0.4, 0.6]);  // 4 levels: one retires
+  assert.equal(T.addItems(next, t0, [thing("x")]).error, "layout_changed");
+  const gone = Object.entries(next.levels).find(([, l]) => l.retired)[0];
+  assert.equal(T.addItems(next, T.ticket(a, gone), [thing("x")]).error, "level_gone");
+  assert.ok(t4);
+});
+
+test("a newer photo for the same holder makes the older reply stale (operation tickets)", () => {
+  const ops = new T.Ops();
+  const first = ops.start("fill"), second = ops.start("fill");
+  assert.equal(ops.live(first), false);
+  assert.equal(ops.live(second), true);
+});
+
+test("choosing to trace unstraightened makes a pending straighten stale; a model change cancels everything", () => {
+  const ops = new T.Ops();
+  const warp = ops.start("trace");
+  const fallback = ops.start("trace");
+  assert.equal(ops.live(warp), false);
+  const fill = ops.start("fill");
+  ops.cancel();
+  assert.equal(ops.live(fallback) || ops.live(fill), false);
+});
+
+test("a valid answer appends and never removes", () => {
+  const a = {...T.newTwin(A, "h", rnd), items: {"cold/L0": [thing("milk")]}};
+  const {next} = T.addItems(a, T.ticket(a, "cold/L0"), [thing("jam")]);
+  assert.deepEqual(next.items["cold/L0"].map(i => i.appearance), ["milk", "jam"]);
+});
+
+// ---- finding 3: no invented counts ----
+test("counts: blank stays unknown, whole numbers pass, the rest is refused", () => {
+  assert.deepEqual(T.parseCount(""), {ok: true, value: null});
+  assert.deepEqual(T.parseCount(null), {ok: true, value: null});
+  assert.deepEqual(T.parseCount(" 12 "), {ok: true, value: 12});
+  for (const bad of ["1.5", "abc", "0", "-2", "1e3", "١"]) assert.equal(T.parseCount(bad).ok, false, bad);
+});
+
+// ---- finding 4: Unplaced can be put back ----
+test("an Unplaced thing is placed on a live level in one change, keeping its values", () => {
+  const a = {...T.newTwin(A, "h", rnd), unplaced: [thing("eggs", {count: 6, was: "cold/L1", source: "abc"})]};
+  const {next} = T.placeUnplaced(a, 0, "cold/L2", {label: "계란"});
+  assert.equal(next.unplaced.length, 0);
+  assert.deepEqual(next.items["cold/L2"][0], {appearance: "eggs", label: "계란", count: 6, source: "abc", from_unplaced: "cold/L1"});
+});
+
+test("an Unplaced thing is not placed on a retired level, and a refused save keeps it in Unplaced", () => {
+  const a = {...T.newTwin(A, "h", rnd), unplaced: [thing("eggs")]};
+  const {next: traced} = T.applyTrace(a, "cold", [0.5]);
+  const gone = Object.entries(traced.levels).find(([, l]) => l.retired)[0];
+  assert.equal(T.placeUnplaced(traced, 0, gone).error, "level_gone");
+  const st = new Mem();
+  T.commit(st, T.KEY, traced);
+  st.failSet = true;
+  const {next} = T.placeUnplaced(traced, 0, "cold/L0");
+  assert.equal(T.commit(st, T.KEY, next).ok, false);
+  assert.equal(JSON.parse(st.m.get(T.KEY)).unplaced.length, 1);
+});
+
+// ---- finding 5: a save is believed only after read-back; a bad read-back is undone or reported ----
+test("a refused write leaves storage unchanged and says so", () => {
+  const st = new Mem(); const a = T.newTwin(A, "h", rnd);
+  T.commit(st, T.KEY, a); const before = st.m.get(T.KEY);
+  st.failSet = true;
+  assert.deepEqual(T.commit(st, T.KEY, T.newTwin(B, "h", rnd)), {ok: false, durable: "unchanged"});
+  assert.equal(st.m.get(T.KEY), before);
+});
+
+test("a write that lands but reads back wrong is restored", () => {
+  const st = new Mem(); const a = T.newTwin(A, "h", rnd);
+  T.commit(st, T.KEY, a); const before = st.m.get(T.KEY);
+  st.lie = true;
+  const r = T.commit(st, T.KEY, T.newTwin(B, "h", rnd));
+  st.lie = false;
+  assert.equal(r.ok, false);
+  assert.equal(st.m.get(T.KEY), before);
+});
+
+test("a write that lands and cannot be undone is reported as unknown", () => {
+  const st = new Mem(); T.commit(st, T.KEY, T.newTwin(A, "h", rnd));
+  st.lie = true; st.failRestore = true; st.sets = 0;
+  assert.deepEqual(T.commit(st, T.KEY, T.newTwin(B, "h", rnd)), {ok: false, durable: "unknown"});
+});
+
+test("a read that throws after a landed write is restored or reported, never called unchanged", () => {
+  const st = new Mem(); T.commit(st, T.KEY, T.newTwin(A, "h", rnd)); const before = st.m.get(T.KEY);
+  const orig = st.setItem.bind(st);
+  st.setItem = (k, v) => { orig(k, v); st.failGet = true; };  // the write lands, then reads fail
+  const r = T.commit(st, T.KEY, T.newTwin(B, "h", rnd));
+  st.failGet = false;
+  assert.equal(r.ok, false);
+  assert.notEqual(r.durable, "unchanged");
+  assert.ok(r.durable === "unknown" || st.m.get(T.KEY) === before);
+});
+
+// ---- the trace rules (carried over from the page) ----
+test("removing a line merges the two levels it divided; the loser's things go to Unplaced", () => {
+  const a = {...T.newTwin(B, "h", rnd), items: {"cold/L0": [thing("top")], "cold/L1": [thing("eggs")], "cold/L4": [thing("veg")]}};
+  const lines = T.liveLevels(a, "cold").slice(0, -1).map(([, l]) => l.floor).slice(1);
+  const {next, moved} = T.applyTrace(a, "cold", lines);
+  assert.equal(moved, 1);
+  assert.deepEqual(next.unplaced.map(i => i.appearance + "@" + i.was), ["eggs@cold/L1"]);
+  assert.deepEqual(next.items["cold/L0"].map(i => i.appearance), ["top"]);
+  assert.deepEqual(next.items["cold/L4"].map(i => i.appearance), ["veg"]);
+});
+
+test("added levels get ids never used before", () => {
+  const a = T.newTwin(A, "h", rnd);
+  const {next} = T.applyTrace(a, "cold", [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]);
+  const {next: again} = T.applyTrace(next, "cold", [0.5]);
+  const {next: third} = T.applyTrace(again, "cold", [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]);
+  const added = Object.keys(third.levels).filter(k => k.includes("/N"));
+  assert.equal(new Set(added).size, added.length);
+  assert.ok(added.length >= 3);
+});
+
+test("lines too close or outside are refused", () => {
+  const a = T.newTwin(A, "h", rnd);
+  assert.equal(T.applyTrace(a, "cold", [0.5, 0.51]).error, "lines_too_close");
+  assert.equal(T.applyTrace(a, "cold", [1.2]).error, "line_outside");
+});

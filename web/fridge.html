@@ -151,48 +151,40 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
   </section>
 </main>
 
-<script>
+<script type="module">
+import * as T from "./twin.js";  // the twin's rules (tested in tests/js); this file is the page around them
 const $ = s => document.querySelector(s);
-const KEY = "gp.twin.v1";
 const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it (the person's drop, never automatic)
 let LAYOUTS = [], LAYOUT_SHA = "";
 let stale = null;    // a saved fridge made with other layout data: never reinterpreted, its things carried over
 let twin = null;     // the committed fridge; proposals live in `trace` and `fill` until the person confirms
+let broken = false;  // storage could not be verified: no further saves until the page is reloaded
+const ops = new T.Ops();  // every photo, straighten and scan reply must still be the latest of its kind
+const clone = o => JSON.parse(JSON.stringify(o));
 
-// ---------- storage: commit = write, read back, compare; only then say "saved" ----------
+// ---------- storage: a save is believed only after it is read back (twin.js commit) ----------
+function store(){ try{ return window.sessionStorage; }catch{ return null; } }
 function load(){
-  try{ const t = JSON.parse(sessionStorage.getItem(KEY) || "null"); return t && t.v === 1 ? t : null; }catch{ return null; }
+  try{ const t = JSON.parse(store().getItem(T.KEY) || "null"); return t && t.v === 1 ? t : null; }catch{ return null; }
 }
 function commit(next){
-  const s = JSON.stringify(next);
-  try{
-    sessionStorage.setItem(KEY, s);
-    if(sessionStorage.getItem(KEY) !== s) throw new Error("readback");
-  }catch{
-    $("#saveState").textContent = "Not saved: this browser refused to store it (private mode or full). Your last saved fridge is unchanged.";
-    return false;
-  }
-  twin = next;
-  $("#saveState").textContent = "Saved in this tab.";
-  return true;
+  const say = t => { $("#saveState").textContent = t; };
+  if(broken){ say("Saving is paused: this tab could not confirm what it stored. Reload the page to check your fridge."); return false; }
+  const st = store();
+  const r = st ? T.commit(st, T.KEY, next) : {ok:false, durable:"unchanged"};
+  if(r.ok){ twin = next; say("Saved in this tab."); return true; }
+  if(r.durable === "unknown"){
+    broken = true;
+    say("Not saved, and this tab could not confirm what it stored. Saving is paused; reload the page to check your fridge.");
+  }else say("Not saved: this browser refused to store it (private mode or full). Your last saved fridge is unchanged.");
+  return false;
 }
-const clone = o => JSON.parse(JSON.stringify(o));
 
 // ---------- layouts ----------
 function row(key){ return LAYOUTS.find(r => r.key === key); }
 function label(r){
   if(r.key.startsWith("template:")) return `Generic: ${r.key.slice(9)}`;
   return `${r.brand || ""} ${r.model || r.key}`.trim();
-}
-function seedLevels(r){  // the template's holders, stable ids from the manifest
-  const levels = {};
-  for(const c of r.compartments) c.levels.forEach((l, i) => levels[l.id] = {comp:c.id, kind:l.kind, top:l.top, floor:l.floor, order:i, from:"template"});
-  for(const p of r.panels) p.pockets.forEach(q => levels[q.id] = {panel:p.id, kind:"pocket", from:"template"});
-  return levels;
-}
-function newTwin(r){
-  return {v:1, key:r.key, version:r.version, layouts:LAYOUT_SHA, levels:seedLevels(r), items:{}, unplaced:[],
-          traced:{}, next:1, rev:{}};
 }
 
 async function init(){
@@ -231,35 +223,35 @@ function showSource(){
   const r = row($("#model").value); if(!r) return;
   $("#modelSource").textContent = (r.key.startsWith("template:") ? "Generic layout. " : "") + "Layout from Glass Pantry's catalogue (" + r.key + "@" + r.version + "); some sizes are estimates. Trace fits it to your fridge.";
 }
+function switchTo(r){  // a new fridge keeps everything the old one(s) held, in Unplaced; pending work is cancelled
+  const next = T.replaceModel([twin, stale], r, LAYOUT_SHA);
+  if(!commit(next)) return;
+  stale = null; ops.cancel(); trace = null; fill = null;
+  $("#traceCard").hidden = true; $("#fillCard").hidden = true; $("#modelNote").hidden = true;
+  render();
+}
 $("#useModel").addEventListener("click", () => {
   const r = row($("#model").value); if(!r) return;
   const note = $("#modelNote");
-  if(twin && twin.key === r.key){ render(); return; }
-  const held = twin ? Object.values(twin.items).reduce((n, a) => n + a.length, 0) : 0;
+  if(twin && twin.key === r.key && twin.version === r.version){ render(); return; }
+  const held = T.displaced(twin).length;
   if(held){  // a model change never drops things: the person chooses to move them to Unplaced first
     note.hidden = false; note.className = "note ask";
     note.innerHTML = `<p></p><div class="row" style="margin-top:8px"><button class="small primary" type="button">Move everything to Unplaced and switch</button><button class="small" type="button">Keep my fridge</button></div>`;
     note.querySelector("p").textContent = `Your fridge holds ${held} things. Switching keeps them all, in Unplaced.`;
     const [yes, no] = note.querySelectorAll("button");
-    yes.onclick = () => {
-      const next = newTwin(r);
-      next.unplaced = [...twin.unplaced, ...Object.entries(twin.items).flatMap(([lv, its]) => its.map(it => ({...it, was:lv})))];
-      if(commit(next)){ note.hidden = true; render(); }
-    };
+    yes.onclick = () => switchTo(r);
     no.onclick = () => { note.hidden = true; $("#model").value = twin.key; };
     return;
   }
-  note.hidden = true;
-  const next = newTwin(r);
-  if(stale) next.unplaced = [...(stale.unplaced || []), ...Object.entries(stale.items || {}).flatMap(([lv, its]) => its.map(it => ({...it, was:lv})))];
-  if(commit(next)){ stale = null; render(); }
+  switchTo(r);
 });
 
 // ---------- the fridge drawing ----------
 const SVGNS = "http://www.w3.org/2000/svg";
 function el(tag, attrs, parent){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); if(parent) parent.append(e); return e; }
 function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
-function levelsOf(comp){ return Object.entries(twin.levels).filter(([, l]) => l.comp === comp && !l.retired).sort((a, b) => a[1].top - b[1].top); }
+function levelsOf(comp){ return T.liveLevels(twin, comp); }
 function levelName(id){  // "Shelf 2", "Drawer 1": numbered within its kind, top to bottom
   const l = twin.levels[id], same = levelsOf(l.comp).filter(([, m]) => m.kind === l.kind);
   return `${l.kind === "drawer" ? "Drawer" : "Shelf"} ${same.findIndex(([k]) => k === id) + 1}`;
@@ -321,9 +313,26 @@ function render(){
     const b = document.createElement("button"); b.type = "button"; b.className = "small";
     b.textContent = `Trace ${c.name.en.toLowerCase()}`; b.onclick = () => openTrace(c.id); tb.append(b);
   }
+  renderUnplaced();
+}
+function liveHolders(){ return Object.keys(twin.levels).filter(id => T.isLive(twin, id)); }
+function renderUnplaced(){  // each thing can be renamed and put back on a live shelf, drawer or bin
   $("#unplacedBox").hidden = !twin.unplaced.length;
   const ul = $("#unplaced"); ul.innerHTML = "";
-  for(const it of twin.unplaced){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); }
+  twin.unplaced.forEach((it, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="row" style="gap:6px"><span></span><input aria-label="Label" style="min-width:120px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)"><select aria-label="Put it on"></select><button class="small" type="button">Place</button></div>`;
+    li.querySelector("span").textContent = `${it.appearance || ""}${it.count > 1 ? " ×" + it.count : ""}${it.was ? ` (was ${it.was})` : ""}`;
+    const inp = li.querySelector("input"); inp.value = it.label || "";
+    const sel = li.querySelector("select");
+    for(const id of liveHolders()){ const o = document.createElement("option"); o.value = id; o.textContent = holderName(id); sel.append(o); }
+    li.querySelector("button").onclick = () => {
+      const r = T.placeUnplaced(twin, i, sel.value, {label: inp.value.trim() || null});
+      if(r.error){ $("#saveState").textContent = "That place no longer exists. Pick another."; return; }
+      if(commit(r.next)) render();
+    };
+    ul.append(li);
+  });
 }
 
 // ---------- photos ----------
@@ -345,32 +354,35 @@ const b64 = blob => new Promise(r => { const f = new FileReader(); f.onload = ()
 const UNREADABLE = "This browser could not open that photo. Please choose a JPEG (on iPhone: Settings > Camera > Formats > Most Compatible).";
 
 // ---------- trace: corners -> straighten -> lines -> confirm ----------
-let trace = null;  // {comp, gen, photo(b64), source, size, img, corners, kind, mode, warped, matrix, targets, lines, sel}
-let gen = 0;
+let trace = null;  // {comp, op, photo(b64), source, size, img, corners, kind, mode, warped, matrix, targets, lines, sel}
 
 function openTrace(comp){
   const c = row(twin.key).compartments.find(c => c.id === comp);
-  trace = {comp, gen:++gen};
+  trace = {comp, op:ops.start("trace")}; ops.start("fill"); fill = null;
   $("#traceCard").hidden = false; $("#fillCard").hidden = true;
   $("#traceTitle").textContent = `Trace: ${c.name.en}`;
   for(const id of ["#traceNote", "#traceStage", "#cornerActions", "#lineActions"]) $(id).hidden = true;
+  $("#traceBusy").hidden = true;
   $("#traceCard").scrollIntoView({behavior:"smooth", block:"start"});
 }
-$("#traceClose").onclick = () => { trace = null; gen++; $("#traceCard").hidden = true; };
+$("#traceClose").onclick = () => { trace = null; ops.start("trace"); $("#traceCard").hidden = true; };
+const traceLive = op => trace && ops.live(op);
 function traceNote(text, kind = ""){ const n = $("#traceNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
 
 $("#tracePick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !trace) return;
-  const my = trace.gen; traceNote(""); $("#traceBusy").hidden = false;
+  const my = trace.op = ops.start("trace");  // a new photo makes every older reply stale
+  Object.assign(trace, {mode:null, lines:null}); traceNote(""); $("#traceBusy").hidden = false;
+  for(const id of ["#traceStage", "#cornerActions", "#lineActions"]) $(id).hidden = true;
   try{
     const blob = await shrink(f, 1568);
     const photo = await b64(blob);
     const r = await fetch("straighten", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({photo})});
     const body = await r.json();
-    if(!trace || my !== trace.gen) return;
+    if(!traceLive(my)) return;
     if(!r.ok){ traceNote(body.message || "The engine said: " + body.error, "bad"); return; }
     const img = await loadImg(URL.createObjectURL(blob));
-    if(!trace || my !== trace.gen) return;
+    if(!traceLive(my)) return;
     if(img.naturalWidth !== body.size[0] || img.naturalHeight !== body.size[1]){  // the trace must sit on these pixels
       traceNote("The photo's size changed on the way; please choose it again.", "bad"); return;
     }
@@ -380,30 +392,33 @@ $("#tracePick").addEventListener("change", async e => {
       : "OpenCV found no opening to suggest. Drag each corner onto a corner of the opening.", "ask");
     $("#traceStage").hidden = false; $("#cornerActions").hidden = false; $("#lineActions").hidden = true;
     drawTrace();
-  }catch(err){ if(trace && my === trace.gen) traceNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
-  finally{ if(trace && my === trace.gen) $("#traceBusy").hidden = true; }
+  }catch(err){ if(traceLive(my)) traceNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 });
 function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("decode")); i.src = src; }); }
 
 $("#cornersOk").onclick = async () => {
-  if(!trace) return;
-  const my = trace.gen; $("#traceBusy").hidden = false;
+  if(!trace || trace.mode !== "corners") return;
+  const my = trace.op = ops.start("trace"), corners = clone(trace.corners);  // these corners, as they are now
+  $("#traceBusy").hidden = false;
   try{
     const r = await fetch("straighten", {method:"POST", headers:{"content-type":"application/json"},
-      body:JSON.stringify({photo:trace.photo, corners:trace.corners, source:trace.source})});
+      body:JSON.stringify({photo:trace.photo, corners, source:trace.source})});
     const body = await r.json();
-    if(!trace || my !== trace.gen) return;
+    if(!traceLive(my)) return;
     if(!r.ok){ traceNote((body.message || body.error) + (body.reason ? ` (${body.reason.replaceAll("_", " ")})` : ""), "bad"); return; }
     const img = await loadImg("data:image/jpeg;base64," + body.image);
-    if(!trace || my !== trace.gen) return;
-    Object.assign(trace, {mode:"straightened", warped:img, matrix:body.matrix, targets:body.targets, confirmedCorners:clone(trace.corners)});
+    if(!traceLive(my)) return;
+    Object.assign(trace, {mode:"straightened", warped:img, matrix:body.matrix, targets:body.targets, confirmedCorners:corners});
     startLines();
     traceNote("Straightened to a front view of the opening (shelves set back from it may sit slightly off). Drag the lines onto your shelves; green marks are edges OpenCV sees. A line dropped near a mark lands on it.", "ok");
-  }catch{ if(trace && my === trace.gen) traceNote("The photo could not be sent. Check the connection and try again.", "bad"); }
-  finally{ if(trace && my === trace.gen) $("#traceBusy").hidden = true; }
+  }catch{ if(traceLive(my)) traceNote("The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 };
 $("#noStraighten").onclick = () => {
-  if(!trace) return;
+  if(!trace || !trace.img) return;
+  trace.op = ops.start("trace");  // a pending straighten can no longer replace this choice
+  $("#traceBusy").hidden = true;
   Object.assign(trace, {mode:"unstraightened", warped:trace.img, matrix:null, targets:[]});
   startLines();
   traceNote("Tracing on the photo itself: not straightened and not verified. Drag the lines onto your shelves.", "ask");
@@ -449,7 +464,7 @@ function drawTrace(){
     if(trace.mode === "corners"){
       let best = -1, d = reach;
       trace.corners.forEach(([cx, cy], i) => { const k = Math.hypot(cx - x, cy - y); if(k < d){ d = k; best = i; } });
-      if(best >= 0){ drag = {corner:best}; cv.setPointerCapture(e.pointerId); }
+      if(best >= 0){ trace.op = ops.start("trace"); $("#traceBusy").hidden = true; drag = {corner:best}; cv.setPointerCapture(e.pointerId); }  // moving a corner cancels a pending straighten
       return;
     }
     let best = -1, d = reach;
@@ -480,82 +495,55 @@ $("#addLine").onclick = () => { if(!trace || !trace.lines) return; trace.lines.p
 $("#delLine").onclick = () => { if(!trace || trace.sel < 0) return; trace.lines.splice(trace.sel, 1); trace.sel = -1; $("#delLine").disabled = true; drawTrace(); };
 
 $("#layoutOk").onclick = () => {
-  if(!trace || !trace.lines) return;
-  const ys = trace.lines.map(l => l.y).sort((a, b) => a - b);
-  if(ys.some((y, i) => i && y - ys[i - 1] < 0.03)){ traceNote("Two lines are almost on top of each other. Move or remove one.", "bad"); return; }
-  const bounds = [0, ...ys, 1];
-  const next = clone(twin);
-  const old = levelsOf(trace.comp);
+  if(!trace || !trace.lines || !ops.live(trace.op)) return;
   const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
-  const moved = [];
-  // Each new band keeps the old level it overlaps most (one to one, largest overlaps first), so removing a line
-  // merges the two levels it divided into one that keeps an id, and the level that loses goes to Unplaced.
-  const bands = bounds.slice(0, -1).map((b, i) => [b, bounds[i + 1]]);
-  const pairs = [];
-  bands.forEach(([t, f], i) => old.forEach(([id, l], j) => {
-    const o = Math.min(f, l.floor) - Math.max(t, l.top);
-    if(o > 0) pairs.push([o, i, j]);
-  }));
-  pairs.sort((a, b) => b[0] - a[0]);
-  const bandOf = {}, taken = new Set();
-  for(const [, i, j] of pairs) if(!(i in bandOf) && !taken.has(j)){ bandOf[i] = j; taken.add(j); }
-  bands.forEach(([t, f], i) => {
-    let id;
-    if(i in bandOf) id = old[bandOf[i]][0];
-    else { id = `${trace.comp}/N${next.next++}`; next.levels[id] = {comp:trace.comp, kind:"shelf", from:"added"}; }
-    Object.assign(next.levels[id], {top:t, floor:f, order:i});
-    delete next.levels[id].retired;
-  });
-  for(const [id] of old.filter((_, j) => !taken.has(j))){  // a removed level keeps its things, in Unplaced
-    next.levels[id].retired = true;
-    for(const it of next.items[id] || []) moved.push({...it, was:id});
-    delete next.items[id];
-  }
-  next.unplaced.push(...moved);
-  next.traced[trace.comp] = {mode:trace.mode, source:trace.source, size:trace.size, corners:trace.confirmedCorners || null,
-    matrix:trace.matrix, levels:bounds.length - 1, template:tmpl.length, at:Date.now()};
-  next.rev[trace.comp] = (next.rev[trace.comp] || 0) + 1;  // any scan answering for the old layout is refused
-  if(!commit(next)) return;
-  const same = bounds.length - 1 === tmpl.length;
-  traceNote(`Saved: ${bounds.length - 1} levels. ${same ? "Agrees with the catalogue template's count." : `Differs from the catalogue template (${tmpl.length}).`}${moved.length ? ` ${moved.length} things moved to Unplaced.` : ""}`, "ok");
+  const res = T.applyTrace(twin, trace.comp, trace.lines.map(l => l.y), {mode:trace.mode, source:trace.source, size:trace.size,
+    corners:trace.mode === "straightened" ? trace.confirmedCorners : null, matrix:trace.matrix, template:tmpl.length});
+  if(res.error){ traceNote(res.error === "lines_too_close" ? "Two lines are almost on top of each other. Move or remove one." : "A line is outside the photo.", "bad"); return; }
+  if(!commit(res.next)) return;  // the compartment's revision moved on: scans asked for the old layout are refused
+  const same = res.levels === tmpl.length;
+  traceNote(`Saved: ${res.levels} levels. ${same ? "Agrees with the catalogue template's count." : `Differs from the catalogue template (${tmpl.length}).`}${res.moved ? ` ${res.moved} things moved to Unplaced.` : ""}`, "ok");
   $("#lineActions").hidden = true;
   render();
 };
 
 // ---------- fill: one level from one photo (the existing scan), then the person confirms ----------
-let fill = null;  // {level, gen, rev, res}
+let fill = null;  // {level, op, ticket, res}
 function holderName(id){
   const l = twin.levels[id]; if(!l) return id;
   if(l.kind === "pocket") return `door bin ${id}`;
   const c = row(twin.key).compartments.find(c => c.id === l.comp);
   return `${c.name.en}, ${levelName(id).toLowerCase()}`;
 }
-function compOf(id){ const l = twin.levels[id]; return l && (l.comp || l.panel); }
 function openFill(id){
-  fill = {level:id, gen:++gen, rev:twin.rev[compOf(id)] || 0};
-  $("#fillCard").hidden = false; $("#traceCard").hidden = true; trace = null;
+  fill = {level:id, op:ops.start("fill"), ticket:null, res:null};
+  $("#fillCard").hidden = false; $("#traceCard").hidden = true; trace = null; ops.start("trace");
   $("#fillTitle").textContent = `Fill: ${holderName(id)}`;
   const ul = $("#fillHave"); ul.innerHTML = "";
-  for(const it of twin.items[id] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); }
+  for(const it of twin.items[id] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : it.count === null ? " (count unknown)" : ""}`; ul.append(li); }
   for(const s of ["#fillNote", "#fillStage", "#fillList"]) $(s).hidden = true;
+  $("#fillBusy").hidden = true;
   $("#fillCard").scrollIntoView({behavior:"smooth", block:"start"});
 }
-$("#fillClose").onclick = () => { fill = null; gen++; $("#fillCard").hidden = true; };
+$("#fillClose").onclick = () => { fill = null; ops.start("fill"); $("#fillCard").hidden = true; };
+const fillLive = op => fill && ops.live(op);
 function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
 
 $("#fillPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
-  const my = fill.gen; fillNote(""); $("#fillList").hidden = true; $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
+  const my = fill.op = ops.start("fill");  // a newer photo makes the older reply stale
+  fill.ticket = T.ticket(twin, fill.level); fill.res = null;  // the fridge, holder and layout this photo is for
+  fillNote(""); $("#fillList").hidden = true; $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
   try{
     const blob = await shrink(f);
     const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
     const body = await r.json();
-    if(!fill || my !== fill.gen) return;
+    if(!fillLive(my)) return;
     if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
     fill.res = body;
     showScan(body, URL.createObjectURL(blob), my);
-  }catch(err){ if(fill && my === fill.gen) fillNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
-  finally{ if(fill && my === fill.gen) $("#fillBusy").hidden = true; }
+  }catch(err){ if(fillLive(my)) fillNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(fillLive(my)) $("#fillBusy").hidden = true; }
 });
 
 const WHY = {"photo:blurry":"The photo is out of focus.", "photo:shake":"The photo is smeared by movement.",
@@ -576,7 +564,7 @@ function showScan(res, url, my){
   const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = new Image();
   const fr = (res.trace || []).find(s => s.step === "frames");
   img.onload = () => {
-    if(!fill || my !== fill.gen) return;
+    if(!fillLive(my)) return;
     cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
     const k = fr ? img.naturalWidth / fr.size[0] : 1, lw = Math.max(2, cv.width / 400);
     for(const it of (res.proposal && res.proposal.items) || []){ const b = it.box; if(!Array.isArray(b)) continue;
@@ -613,19 +601,24 @@ function showScan(res, url, my){
 }
 
 $("#fillOk").onclick = () => {
-  if(!fill || !fill.res) return;
-  const lv = twin.levels[fill.level];
-  // the answer must still belong to this level, this layout and this photo
-  if(!lv || lv.retired || (twin.rev[compOf(fill.level)] || 0) !== fill.rev){
-    fillNote("This shelf changed while the photo was read (re-traced or removed). Nothing was added; photograph it again.", "bad"); return;
-  }
+  if(!fill || !fill.res || !ops.live(fill.op)) return;
   const source = fill.res.proposal && fill.res.proposal.source;
-  const add = [...document.querySelectorAll("#fillRows tr")].filter(tr => tr.children[0].querySelector("input").checked).map(tr => ({
-    appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
-    count:Math.max(1, parseInt(tr.children[3].querySelector("input").value, 10) || 1), source, at:Date.now()}));
-  const next = clone(twin);
-  next.items[fill.level] = [...(next.items[fill.level] || []), ...add];  // a scan adds; it never removes
-  if(!commit(next)) return;
+  const add = [], bad = [];
+  for(const tr of document.querySelectorAll("#fillRows tr")){
+    if(!tr.children[0].querySelector("input").checked) continue;
+    const c = T.parseCount(tr.children[3].querySelector("input").value);  // blank = unknown; never invented
+    tr.children[3].querySelector("input").style.borderColor = c.ok ? "" : "var(--bad)";
+    if(!c.ok){ bad.push(tr); continue; }
+    add.push({appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
+              count:c.value, source, at:Date.now()});
+  }
+  if(bad.length){ fillNote("A count must be a whole number of 1 or more, or left blank if you are not sure.", "bad"); return; }
+  const r = T.addItems(twin, fill.ticket, add);  // same fridge, same holder, same layout as when the photo was chosen
+  if(r.error){
+    fillNote(r.error === "other_fridge" ? "You changed the fridge while this photo was read. Nothing was added."
+      : "This shelf changed while the photo was read (re-traced or removed). Nothing was added; photograph it again.", "bad"); return;
+  }
+  if(!commit(r.next)) return;
   fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
   $("#fillList").hidden = true; fill.res = null;
   openFillKeep();

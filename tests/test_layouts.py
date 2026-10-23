@@ -42,3 +42,9 @@ def test_boxes_are_normalized_fractions_not_millimetres():
     for row in json.loads(LAYOUTS.read_text(encoding="utf-8")):
         for c in row["compartments"]:
             assert "box_mm" not in c and len(c["box"]) == 6 and all(0 <= v <= 1 for v in c["box"]), row["key"]
+
+
+def test_the_twin_module_is_served_as_javascript():
+    from service import handler as h
+    r = h.handler({"rawPath": "/twin.js", "requestContext": {"http": {"method": "GET"}}})
+    assert r["statusCode"] == 200 and r["headers"]["content-type"].startswith("text/javascript") and "export function commit" in r["body"]
