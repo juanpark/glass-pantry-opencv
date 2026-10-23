@@ -65,3 +65,49 @@ test("drawing never changes the twin", () => {
   sceneOf(a, A);
   assert.equal(JSON.stringify(a), before);
 });
+
+// ---- Codex R1 ----
+import {cameraFor} from "../../web/scene.js";
+const live = t => Object.entries(t.levels).filter(([, l]) => l.comp && !l.retired).map(([id]) => id).sort();
+
+test("every live compartment level is drawn exactly once, on every catalogue layout and after tracing", () => {
+  for (const r of ROWS) {
+    const a = T.newTwin(r, "h", () => 0.5);
+    const drawn = sceneOf(a, r).parts.filter(p => p.kind === "shelf" || p.kind === "drawer").map(p => p.level).sort();
+    assert.deepEqual(drawn, live(a), r.key);
+  }
+  const t = T.applyTrace(fresh(), "cold", [0.01, 0.2, 0.4, 0.6]).next;
+  assert.deepEqual(sceneOf(t, A).parts.filter(p => p.kind === "shelf" || p.kind === "drawer").map(p => p.level).sort(), live(t));
+});
+
+test("plates stay inside their compartment, items inside their own level, even in thin first and last bands", () => {
+  const t = T.applyTrace(fresh(), "cold", [0.01, 0.2, 0.4, 0.99]).next;
+  for (const id of live(t)) t.items[id] = [{appearance: "tall", hFrac: 1, wFrac: 1}, {appearance: "x"}];
+  const s = sceneOf(t, A), cold = s.parts.find(p => p.id === "cold");
+  const y0 = cold.box[1], ch = cold.box[4];
+  for (const p of s.parts.filter(p => p.level && p.level.startsWith("cold/"))) {
+    assert.ok(inside(p.box, cold.box), `${p.kind} ${p.level} ${p.box}`);
+    if (p.kind !== "item") continue;
+    const l = t.levels[p.level], floor = y0 + (1 - l.floor) * ch, top = y0 + (1 - l.top) * ch;
+    assert.ok(p.box[1] >= floor - 1e-6 && p.box[1] + p.box[4] <= top + 1e-6, `${p.level} ${p.box[1]}+${p.box[4]} in [${floor}, ${top}]`);
+  }
+});
+
+function project(cam, p) {
+  const sub = (a, b) => a.map((v, i) => v - b[i]), dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => a.map(v => v / Math.hypot(...a));
+  const f = norm(sub(cam.target, cam.position)), r = norm(cross(f, [0, 1, 0])), u = cross(r, f), d = sub(p, cam.position);
+  const tv = Math.tan(cam.fov * Math.PI / 360), th = tv * cam.aspect;
+  return [dot(d, r) / (dot(d, f) * th), dot(d, u) / (dot(d, f) * tv)];
+}
+
+test("the starting camera shows the whole cabinet, portrait phone and desktop, for every layout", () => {
+  for (const r of ROWS) for (const aspect of [324 / 560, 946 / 560, 0.4]) {
+    const [W, H, D] = r.mm, cam = {...cameraFor({w: W, h: H, d: D}, aspect), aspect};
+    for (const x of [-W / 2, W / 2]) for (const y of [0, H]) for (const z of [-D / 2, D / 2]) {
+      const [nx, ny] = project(cam, [x, y, z]);
+      assert.ok(Math.abs(nx) <= 1 && Math.abs(ny) <= 1, `${r.key} @${aspect.toFixed(2)}: ${nx.toFixed(2)}, ${ny.toFixed(2)}`);
+    }
+  }
+});

@@ -2,7 +2,7 @@
 // view. Everything about where things go is decided in scene.js; this file only chooses materials and the camera.
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
-import {sceneOf} from "./scene.js";
+import {sceneOf, cameraFor} from "./scene.js";
 
 const PALETTE = [0xd9a55b, 0x7fb3a6, 0xc96f5a, 0x8aa0c8, 0xb7c27a, 0xd08fb0, 0x9c8bd1, 0xe0c46c];
 
@@ -28,15 +28,19 @@ export function mount(host, twin, row){
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf4f2ee);
   const cam = new THREE.PerspectiveCamera(35, host.clientWidth / host.clientHeight, 10, 20000);
-  const dist = (H / 2) / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * 1.1;  // the whole fridge in view
-  cam.position.set(W * 0.7, H * 0.6, D / 2 + dist);
+  const frame = () => {  // the whole cabinet in view at this aspect (scene.js, tested for every layout)
+    const c = cameraFor({w: W, h: H, d: D}, cam.aspect, cam.fov);
+    cam.position.set(...c.position); cam.lookAt(...c.target);
+    return c.target;
+  };
+  const target = frame();
   const ren = new THREE.WebGLRenderer({antialias: true});
   ren.setPixelRatio(Math.min(devicePixelRatio, 2));
   ren.setSize(host.clientWidth, host.clientHeight);
   ren.domElement.style.touchAction = "none";  // one finger turns the fridge instead of scrolling the page
   host.append(ren.domElement);
   const ctl = new OrbitControls(cam, ren.domElement);
-  ctl.target.set(0, H / 2, 0); ctl.enableDamping = true; ctl.update();
+  ctl.target.set(...target); ctl.enableDamping = true; ctl.update();
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b0a4, 2.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(W, H * 1.5, D * 2); scene.add(sun);
 
@@ -67,7 +71,10 @@ export function mount(host, twin, row){
   }
 
   let alive = true;
-  const fit = () => { cam.aspect = host.clientWidth / host.clientHeight; cam.updateProjectionMatrix(); ren.setSize(host.clientWidth, host.clientHeight); };
+  const fit = () => {  // a new size reframes the whole cabinet
+    cam.aspect = host.clientWidth / host.clientHeight; cam.updateProjectionMatrix(); frame(); ctl.update();
+    ren.setSize(host.clientWidth, host.clientHeight);
+  };
   const ro = new ResizeObserver(fit); ro.observe(host);
   (function loop(){ if(!alive) return; ctl.update(); ren.render(scene, cam); requestAnimationFrame(loop); })();
   return {dispose(){ alive = false; ro.disconnect(); ctl.dispose(); ren.dispose(); ren.domElement.remove(); }};

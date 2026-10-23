@@ -27,20 +27,31 @@ export function sceneOf(twin, row) {
       .sort((a, b) => a[1].top - b[1].top);
     for (const [lid, l] of levels) {
       const floor = y0 + (1 - l.floor) * ch, top = y0 + (1 - l.top) * ch, lh = top - floor;
+      const plate = Math.min(6, lh * 0.2);  // a glass plate, thinner in a thin band; the compartment floor is a plate too
       if (l.kind === "drawer") parts.push({kind: "drawer", level: lid, box: [x0 + 10, floor, z0 + 10, cw - 20, lh * 0.85, cd - 20]});
-      else if (l.floor < 0.999) parts.push({kind: "shelf", level: lid, box: [x0, floor - 3, z0, cw, 6, cd]});
+      else parts.push({kind: "shelf", level: lid, box: [x0, floor, z0, cw, plate, cd]});
+      const base = floor + plate, room = (top - base) * 0.9;  // items stand on the plate and stay under the next one
       const its = twin.items[lid] || [];
       its.forEach((it, i) => {
         const [shape, sw, sh, sd] = FAMILIES[family(it.vessel)];
-        const h = clamp((it.hFrac || 0.45) * lh, Math.min(30, lh * 0.8), lh * 0.8);
+        const h = clamp((it.hFrac || 0.45) * lh, Math.min(30, room), room);
         const w = clamp(it.wFrac ? it.wFrac * cw : h * sw / sh, 25, cw / 2);
         const d = Math.min(cd - 20, w * sd / sw);
         const fx = Number.isFinite(it.xFrac) ? clamp(it.xFrac, 0, 1) : (its.length > 1 ? 0.12 + 0.76 * i / (its.length - 1) : 0.5);
         const cx = clamp(x0 + fx * cw, x0 + w / 2, x1 - w / 2);
         parts.push({kind: "item", level: lid, shape, label: `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`,
-                    box: [cx - w / 2, floor + 3, clamp(z0 + cd / 2 + 40 - d / 2, z0, z1 - d), w, h, d]});  // a little forward
+                    box: [cx - w / 2, base, clamp(z0 + cd / 2 + 40 - d / 2, z0, z1 - d), w, h, d]});  // a little forward
       });
     }
   }
   return {cabinet: {w: W, h: H, d: D}, parts};
+}
+
+/** Where the camera starts: a three-quarter view from the front right, far enough that the cabinet's bounding sphere
+ * fits both the vertical and the horizontal field of view at this aspect (width / height). */
+export function cameraFor({w, h, d}, aspect, fov = 35) {
+  const vf = fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * aspect);
+  const radius = Math.hypot(w, h, d) / 2, dist = radius / Math.sin(Math.min(vf, hf) / 2) * 1.02;
+  const dir = [0.42, 0.18, 1], n = Math.hypot(...dir), target = [0, h / 2, 0];
+  return {fov, target, position: dir.map((v, i) => target[i] + v / n * dist)};
 }
