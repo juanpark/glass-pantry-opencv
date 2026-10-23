@@ -10,11 +10,15 @@ markers: **built** (code and tests on this branch), **planned** (decided, not ye
 |---|---|---|---|---|
 | 1. Identify the fridge | picks it from the list (model or generic type) | none | none | **built** |
 | 2. Load its layout | sees a flat front view: compartments, shelves, drawers, door bins | none | none (the app's catalogue as data, `web/layouts/layouts.json`) | **built** |
-| 3. Confirm the layout over a photo | one photo per compartment; drags four corners, then the shelf lines; confirms | none | suggests the opening's corners (largest valid convex quadrilateral, a suggestion only); validates the quad; `warpPerspective` to a front view of the opening plane; marks real horizontal edges as snap targets | **built** (`verifier/opening.py`, `POST /straighten`) |
+| 3. Confirm the layout over a photo | one photo per compartment; places four corners, then the shelf lines; confirms | none | validates the quad; `warpPerspective` to a front view of the opening plane. Corner suggestions and edge snap targets are built but **off**: they failed their pre-set bar on the test photos (below) | **built** (`verifier/opening.py`, `POST /straighten`) |
 | 4. Fill a shelf, drawer or door bin | photographs it; edits and confirms the list | reads the items | photo gate; shelf check; zoom pass (small labels and counts re-read from the full photo) | **built** (`POST /scan`) |
 
 Rules the page keeps (`web/fridge.html`):
-- **Nothing is filed without a person.** A suggestion is drawn dashed and labelled; an opening is accepted only after
+- **Suggestions are judged before they ship.** On the held-out test photos (hand truth, `tools/eval_trace.py`) the corner
+  suggestion was never within 3% of the true corners (0/3; worst corner 12-19% of the diagonal off) and the snap
+  targets found 93% of real edges but added 3-15 false ones per photo, so both are switched off; the person places
+  corners and lines by hand.
+- **Nothing is filed without a person.** A suggestion (when enabled) is drawn dashed and labelled; an opening is accepted only after
   the person confirms the corners. A photo where the opening cannot be framed is traced unstraightened, labelled
   unverified.
 - **OpenCV never invents.** It never adds a shelf, an item or a model, and never moves a line by itself; a line the

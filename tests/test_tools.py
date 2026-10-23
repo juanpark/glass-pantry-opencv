@@ -58,3 +58,46 @@ def test_an_invalid_choice_stops_the_evaluation(tmp_path):
     import pytest
     with pytest.raises(SystemExit):
         eval_zoom.main(run(tmp_path, [], {"s1__r1__zoom|i1|label": "maybe"}))
+
+
+def _trace_case(tmp_path, truth, expected):
+    import json
+    import subprocess
+    import sys
+    import cv2
+    from tests.test_opening import opening_photo
+    img, q = opening_photo()
+    for n in expected:
+        cv2.imwrite(str(tmp_path / f"{n}.jpg"), img)
+    from verifier import frames
+    size = list(frames.canonical(cv2.imencode(".jpg", img)[1].tobytes()).size)
+    k = size[0] / img.shape[1]
+    full = {"eligible": True, "corners": (q * k).tolist(), "lines": [0.3, 0.55, 0.8], "size": size}
+    t = {n: full for n in truth}
+    (tmp_path / "truth.json").write_text(json.dumps(t))
+    (tmp_path / "notes.json").write_text(json.dumps({"compartments": {n: {} for n in expected}}))
+    return subprocess.run([sys.executable, "tools/eval_trace.py", str(tmp_path), str(tmp_path / "truth.json"),
+                           str(tmp_path / "notes.json")], capture_output=True, text=True)
+
+
+def test_eval_trace_scores_a_complete_set(tmp_path):
+    r = _trace_case(tmp_path, ["A", "B"], ["A", "B"])
+    assert r.returncode == 0 and "GATE (frozen)" in r.stdout
+
+
+def test_eval_trace_refuses_a_gate_decision_with_a_photo_missing(tmp_path):
+    r = _trace_case(tmp_path, ["A"], ["A", "B"])
+    assert r.returncode == 2 and "INCOMPLETE" in r.stdout and "KEEP" not in r.stdout and "GATE" not in r.stdout
+
+
+def test_eval_trace_refuses_an_empty_expected_list(tmp_path):
+    r = _trace_case(tmp_path, ["A"], [])
+    assert r.returncode == 2 and "INCOMPLETE" in r.stdout
+
+
+def test_the_fridge_page_does_not_advertise_switched_off_suggestions():
+    from pathlib import Path
+    from service import handler as h
+    page = (Path(__file__).resolve().parent.parent / "web" / "fridge.html").read_text(encoding="utf-8")
+    if not h.SUGGEST_CORNERS:
+        assert "suggests corners" not in page and "by hand" in page

@@ -22,10 +22,11 @@ The page follows the Glass Pantry app's pipeline (docs/pipeline.md): **pick the 
 app's catalogue) → **trace each compartment over a photo** → **fill each shelf, drawer or door bin from its own
 photo**. A person confirms every layout and every list; the fridge is kept in the browser tab only.
 
-**Tracing a compartment (no model call).** OpenCV suggests the opening's four corners (largest convex quadrilateral
-passing area, angle and foreshortening checks; shown dashed as a suggestion), the person drags them onto the opening
-and confirms, OpenCV straightens the opening plane with `warpPerspective` and marks real horizontal edges (Canny +
-Hough row profile) where a shelf line the person drops will land. A removed shelf's things move to "Unplaced"; nothing
+**Tracing a compartment (no model call).** The person places the opening's four corners; OpenCV checks the
+quadrilateral (area, angles, foreshortening) and straightens the opening plane with `warpPerspective`; the person
+draws the shelf lines on the straightened view. We also built OpenCV suggestions for the corners (largest valid
+convex quadrilateral) and for snap edges (Canny + Hough row profile); both failed their pre-set bar on the test
+photos and are switched off (§6). A removed shelf's things move to "Unplaced"; nothing
 is ever deleted. A photo whose opening cannot be framed is traced unstraightened and labelled unverified.
 
 **Filling a level.** One shelf photo goes through an agent loop. **OpenCV's evidence decides each next action:**
@@ -106,7 +107,23 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
   - 1 was unclear.
 - 23 close-up label readings agreed.
 
-**[test] results:** to be filled from `tools/eval_zoom.py`, with denominators.
+**[test] results** (6 new shelf photos from 3 spaces, before/after one change each, 2 runs per photo = 12 scans;
+truth by the owner's annotation before scoring):
+- **Labels:** 28 labelled readings, all annotated. **0 were wrong first readings**, so the zoom pass had nothing to
+  catch on this set. It raised **2 false label alarms** (2 of 28).
+- **Counts:** 5 count re-reads, **5 false alarms**: the close-up counted packages (one egg tray) where the first
+  reading counted units (30 eggs). Count re-reads are now switched off; label re-reads stay.
+- **Cost and time per scan:** $0.065 → $0.080 with zoom (+23%); median 19.5 s → 23.9 s.
+- **Step 3 suggestions** (5 compartment photos: 3 with the whole opening visible, 2 deliberately not): corner
+  suggestion within 3% of the true corners on 0 of 3 (worst corner 12-19% of the diagonal off) and offered on both
+  photos where it should not have been; snap targets found 14 of 15 true edges but added 3, 13 and 15 false ones. Both
+  failed the bar set before testing (offered on ≥60% with median error ≤3%; recall ≥60% with ≤2 false per photo) and
+  are off.
+
+**Reading these together:** on the development photos the zoom pass turned 4 wrong product names into questions;
+on the new photos the model read every label right and the zoom pass only added questions. One kitchen, 12 scans:
+the honest conclusion is that the zoom pass is a safety net whose value depends on how hard the photo is, at a
+known cost (+$0.015, +4 s, ~7% false label questions).
 
 **Failures we saw and what we did:**
 

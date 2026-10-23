@@ -1,6 +1,9 @@
 """Score step 3's OpenCV suggestions against the hand truth (plan v4 R3, R2-3; thresholds frozen 10/23).
 
-    uv run python tools/eval_trace.py PHOTO_DIR TRUTH.json
+    uv run python tools/eval_trace.py PHOTO_DIR TRUTH.json NOTES.json
+
+NOTES.json's "compartments" is the frozen list of photos that must all be scored: a photo without complete truth
+makes the result INCOMPLETE and no gate decision is printed (every attempted photo counts, R2-3).
 
 Eligible photos (all four opening corners visible): was a corner proposal offered, and how far is its worst corner
 from the person's (fraction of the image diagonal; good <= 0.03)? On the photo straightened with the PERSON's
@@ -22,6 +25,20 @@ GOOD, HIT = 0.03, 0.02
 GATE = {"offered": 0.6, "median_err": 0.03, "recall": 0.6, "spurious": 2}
 
 photos, truth = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
+expected = list(json.loads(Path(sys.argv[3]).read_text())["compartments"])
+
+
+def complete(t) -> bool:
+    if not isinstance(t, dict) or not isinstance(t.get("eligible"), bool) or "size" not in t:
+        return False
+    return not t["eligible"] or (len(t.get("corners") or []) == 4 and isinstance(t.get("lines"), list))
+
+
+missing = [n for n in expected if not complete(truth.get(n))]
+if not expected or missing:
+    print(f"INCOMPLETE: no truth for {missing or 'any expected photo'}; no gate decision")
+    sys.exit(2)
+truth = {n: truth[n] for n in expected}
 el, inel, errs, rec_hits, rec_all, spur = [], [], [], 0, 0, []
 for name, t in truth.items():
     f = frames.canonical((photos / f"{name}.jpg").read_bytes())
