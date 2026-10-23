@@ -156,6 +156,7 @@ const $ = s => document.querySelector(s);
 const KEY = "gp.twin.v1";
 const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it (the person's drop, never automatic)
 let LAYOUTS = [], LAYOUT_SHA = "";
+let stale = null;    // a saved fridge made with other layout data: never reinterpreted, its things carried over
 let twin = null;     // the committed fridge; proposals live in `trace` and `fill` until the person confirms
 
 // ---------- storage: commit = write, read back, compare; only then say "saved" ----------
@@ -213,8 +214,8 @@ async function init(){
   twin = load();
   if(twin && (!row(twin.key) || twin.layouts !== LAYOUT_SHA)){  // never reinterpret a saved fridge under other data
     $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
-    $("#modelNote").textContent = "The saved fridge was made with a different layout list. Pick a fridge to start again; the old one stays in this tab until you do.";
-    twin = null;
+    $("#modelNote").textContent = "The saved fridge was made with a different layout list. Pick a fridge to start again; everything it held moves to Unplaced.";
+    stale = twin; twin = null;
   }
   if(twin){ sel.value = twin.key; render(); }
   $("#consent").addEventListener("change", gate);
@@ -249,7 +250,9 @@ $("#useModel").addEventListener("click", () => {
     return;
   }
   note.hidden = true;
-  if(commit(newTwin(r))) render();
+  const next = newTwin(r);
+  if(stale) next.unplaced = [...(stale.unplaced || []), ...Object.entries(stale.items || {}).flatMap(([lv, its]) => its.map(it => ({...it, was:lv})))];
+  if(commit(next)){ stale = null; render(); }
 });
 
 // ---------- the fridge drawing ----------
@@ -257,6 +260,11 @@ const SVGNS = "http://www.w3.org/2000/svg";
 function el(tag, attrs, parent){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); if(parent) parent.append(e); return e; }
 function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 function levelsOf(comp){ return Object.entries(twin.levels).filter(([, l]) => l.comp === comp && !l.retired).sort((a, b) => a[1].top - b[1].top); }
+function levelName(id){  // "Shelf 2", "Drawer 1": numbered within its kind, top to bottom
+  const l = twin.levels[id], same = levelsOf(l.comp).filter(([, m]) => m.kind === l.kind);
+  return `${l.kind === "drawer" ? "Drawer" : "Shelf"} ${same.findIndex(([k]) => k === id) + 1}`;
+}
+function clip(t, n){ return t.length > n ? t.slice(0, n - 1) + "…" : t; }
 function count(id){ return (twin.items[id] || []).length; }
 
 function render(){
@@ -281,15 +289,15 @@ function render(){
       const tx = el("text", {x:x + 8, y:y + h / 2, "font-size":16, fill:css("--muted")}, svg); tx.textContent = "(no shelves in this compartment)";
     }
     for(const [id, l] of lv){
-      const g = el("g", {class:"lvl", tabindex:0, role:"button", "aria-label":`${c.name.en} ${l.kind} ${l.order + 1}: ${count(id)} things`}, svg);
+      const g = el("g", {class:"lvl", tabindex:0, role:"button", "aria-label":`${c.name.en} ${levelName(id)}: ${count(id)} things`}, svg);
       const ly = y + 30 + l.top * (h - 34), lh = (l.floor - l.top) * (h - 34);
       el("rect", {x:x + 6, y:ly + 2, width:w - 12, height:Math.max(8, lh - 4), rx:4, fill:"transparent", stroke:css("--line"), "stroke-width":1.5}, g);
       el("line", {x1:x + 6, x2:x + w - 6, y1:ly + lh, y2:ly + lh, stroke:css(l.kind === "drawer" ? "--grey" : "--accent"), "stroke-width":l.kind === "drawer" ? 2 : 4}, g);
       const n = count(id);
       const tx = el("text", {x:x + 14, y:ly + Math.min(lh - 8, 26), "font-size":16, fill:css("--fg")}, g);
-      tx.textContent = `${l.kind === "drawer" ? "Drawer" : "Shelf"} ${l.order + 1}${l.from === "added" ? " (added)" : ""}${n ? ` · ${n}` : ""}`;
+      tx.textContent = `${levelName(id)}${l.from === "added" ? " (added)" : ""}${n ? ` · ${n}` : ""}`;
       const its = (twin.items[id] || []).slice(0, Math.max(0, Math.floor((lh - 34) / 18)));
-      its.forEach((it, i) => { const s = el("text", {x:x + 14, y:ly + 44 + i * 18, "font-size":13, fill:css("--muted")}, g); s.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; });
+      its.forEach((it, i) => { const s = el("text", {x:x + 14, y:ly + 44 + i * 18, "font-size":13, fill:css("--muted")}, g); s.textContent = clip(`${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`, Math.floor(w / 9)); });
       g.onclick = () => openFill(id); g.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openFill(id); } };
     }
   }
@@ -509,7 +517,7 @@ function holderName(id){
   const l = twin.levels[id]; if(!l) return id;
   if(l.kind === "pocket") return `door bin ${id}`;
   const c = row(twin.key).compartments.find(c => c.id === l.comp);
-  return `${c.name.en}, ${l.kind} ${l.order + 1}`;
+  return `${c.name.en}, ${levelName(id).toLowerCase()}`;
 }
 function compOf(id){ const l = twin.levels[id]; return l && (l.comp || l.panel); }
 function openFill(id){
