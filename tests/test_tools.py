@@ -206,3 +206,11 @@ def test_the_3d_view_is_lazy_read_only_and_served():
         assert r["statusCode"] == 200 and r["headers"]["content-type"].startswith("text/javascript")
     wf = (__import__("pathlib").Path(__file__).resolve().parent.parent / ".github/workflows/deploy.yml").read_text()
     assert "tests/js/scene.test.mjs" in wf
+
+
+def test_reframing_on_resize_also_resets_the_orbit_target():
+    """Codex 3D R2: after a pan, resize must look at the cabinet's centre again, not the panned point."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "web" / "twin3d.js").read_text(encoding="utf-8")
+    fit = src[src.index("const fit = () =>"):src.index("const ro =")]
+    assert fit.index("ctl.target.set(...frame())") < fit.index("ctl.update()")

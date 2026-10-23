@@ -72,7 +72,7 @@ export function mount(host, twin, row){
 
   let alive = true;
   const fit = () => {  // a new size reframes the whole cabinet
-    cam.aspect = host.clientWidth / host.clientHeight; cam.updateProjectionMatrix(); frame(); ctl.update();
+    cam.aspect = host.clientWidth / host.clientHeight; cam.updateProjectionMatrix(); ctl.target.set(...frame()); ctl.update();
     ren.setSize(host.clientWidth, host.clientHeight);
   };
   const ro = new ResizeObserver(fit); ro.observe(host);
