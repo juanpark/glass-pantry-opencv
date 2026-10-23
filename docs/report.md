@@ -43,6 +43,12 @@ draws nothing of its own. A removed shelf's things move to "Unplaced"; nothing i
 opening cannot be framed is traced unstraightened and labelled unverified (an outline the lines cannot be drawn
 through, such as crossed corners, is refused even then).
 
+**Seeing the fridge in 3D (no model call).** A "3D view" draws the same browser twin with three.js: the cabinet,
+a glass plate per traced shelf, drawers, and each confirmed thing as a basic shape (bottle, jar, carton, tray …)
+standing where it stood in its shelf photo, at a height taken from that photo and kept inside its own shelf. The
+geometry is a pure function of the twin (`web/scene.js`, tested on all 16 layouts); the view never changes the twin.
+The phone app uses library 3D models where it has them; this page uses shapes only.
+
 **Filling a level.** One shelf photo goes through an agent loop. **OpenCV's evidence decides each next action:**
 
 1. **Frames.** One canonical image (1568 px long edge) is used by every check and sent to the model, so no check
@@ -194,5 +200,5 @@ cost is expected to be lower but is unmeasured.
 | Web page + engine on AWS | Live (switch on during judging, capped) |
 | Recorded example on the page | Replay of one real run, labelled RECORDED |
 | Glass Pantry app footage in the video | The released app. The zoom pass is **not** in the released app; a prototype build, if shown, is labelled as such |
-| Fridge from a sticker photo, two-step outline editor | Live on the web page; not yet in the phone app |
+| Fridge from a sticker photo, two-step outline editor, 3D view | Live on the web page; not yet in the phone app (the app has its own 3D renderer) |
 | Change detection | Experiment, not in the service |
