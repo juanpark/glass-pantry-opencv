@@ -44,7 +44,7 @@ svg{display:block;width:100%;height:auto;max-height:70vh;touch-action:manipulati
 .lvl{cursor:pointer}
 .lvl:hover rect,.lvl:focus rect{stroke:var(--accent);stroke-width:3}
 .stage{position:relative;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
-.stage canvas{width:100%;height:auto;display:block;border-radius:6px;background:var(--code)}
+.stage canvas{width:auto;max-width:100%;height:auto;max-height:78vh;display:block;margin:0 auto;border-radius:6px;background:var(--code)}
 .tablewrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.88rem}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -116,15 +116,17 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <label class="btn primary" id="tracePickLabel" aria-disabled="true">Choose a compartment photo<input type="file" id="tracePick" accept="image/*" disabled></label>
       <span id="traceBusy" class="row muted" hidden><span class="spinner"></span><span>Working…</span></span>
     </div>
+    <p id="traceStep" style="font-weight:600" hidden></p>
     <div id="traceNote" class="note" hidden></div>
     <div class="stage" id="traceStage" hidden><canvas id="traceCv"></canvas></div>
-    <div class="row" id="cornerActions" hidden>
-      <button class="primary" id="cornersOk" type="button">The corners are on the opening's edges: straighten</button>
-      <button id="noStraighten" type="button">Trace on the photo instead</button>
+    <div class="row" id="outlineActions" hidden>
+      <button class="primary" id="outlineOk" type="button">Next: match the shelves</button>
+      <button id="noCorners" type="button">I can't see all four corners</button>
     </div>
     <div class="row" id="lineActions" hidden>
-      <button id="addLine" type="button">Add a shelf line</button>
+      <button id="addLine" type="button">Add a line</button>
       <button id="delLine" type="button" disabled>Remove the selected line</button>
+      <button id="backOutline" type="button">Back to the outline</button>
       <button class="primary" id="layoutOk" type="button">Confirm this layout</button>
     </div>
   </section>
@@ -353,27 +355,35 @@ function shrink(file, long = 3024){
 const b64 = blob => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result.split(",")[1]); f.readAsDataURL(blob); });
 const UNREADABLE = "This browser could not open that photo. Please choose a JPEG (on iPhone: Settings > Camera > Formats > Most Compatible).";
 
-// ---------- trace: corners -> straighten -> lines -> confirm ----------
-let trace = null;  // {comp, op, photo(b64), source, size, img, corners, kind, mode, warped, matrix, targets, lines, sel}
+// ---------- trace, in two steps on the same photo ----------
+// Step 1 "Outline the opening": a see-through shape with named corners and edges; drag a corner, or a whole edge.
+// OpenCV then checks the outline and straightens the opening (POST /straighten). Step 2 "Match the shelves": the
+// catalogue's levels drawn inside the outline in perspective, each named; drag, add, remove, confirm. OpenCV draws
+// no guesses of its own (its corner and edge suggestions failed their test, docs/pipeline.md).
+let trace = null;  // {comp, op, photo(b64), source, size, img, step, mode, corners, confirmedCorners, matrix, targets, lines, sel}
+const CORNER_NAMES = ["top-left", "top-right", "bottom-right", "bottom-left"];
+const EDGE_NAMES = ["top edge", "right wall", "bottom edge", "left wall"];
 
 function openTrace(comp){
   const c = row(twin.key).compartments.find(c => c.id === comp);
   trace = {comp, op:ops.start("trace")}; ops.start("fill"); fill = null;
   $("#traceCard").hidden = false; $("#fillCard").hidden = true;
   $("#traceTitle").textContent = `Trace: ${c.name.en}`;
-  for(const id of ["#traceNote", "#traceStage", "#cornerActions", "#lineActions"]) $(id).hidden = true;
+  for(const id of ["#traceNote", "#traceStage", "#traceStep", "#outlineActions", "#lineActions"]) $(id).hidden = true;
   $("#traceBusy").hidden = true;
   $("#traceCard").scrollIntoView({behavior:"smooth", block:"start"});
 }
 $("#traceClose").onclick = () => { trace = null; ops.start("trace"); $("#traceCard").hidden = true; };
 const traceLive = op => trace && ops.live(op);
 function traceNote(text, kind = ""){ const n = $("#traceNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
+function stepTitle(t){ $("#traceStep").hidden = false; $("#traceStep").textContent = t; }
+function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("decode")); i.src = src; }); }
 
 $("#tracePick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !trace) return;
   const my = trace.op = ops.start("trace");  // a new photo makes every older reply stale
-  Object.assign(trace, {mode:null, lines:null}); traceNote(""); $("#traceBusy").hidden = false;
-  for(const id of ["#traceStage", "#cornerActions", "#lineActions"]) $(id).hidden = true;
+  Object.assign(trace, {step:null, lines:null}); traceNote(""); $("#traceBusy").hidden = false;
+  for(const id of ["#traceStage", "#traceStep", "#outlineActions", "#lineActions"]) $(id).hidden = true;
   try{
     const blob = await shrink(f, 1568);
     const photo = await b64(blob);
@@ -383,127 +393,186 @@ $("#tracePick").addEventListener("change", async e => {
     if(!r.ok){ traceNote(body.message || "The engine said: " + body.error, "bad"); return; }
     const img = await loadImg(URL.createObjectURL(blob));
     if(!traceLive(my)) return;
-    if(img.naturalWidth !== body.size[0] || img.naturalHeight !== body.size[1]){  // the trace must sit on these pixels
+    if(img.naturalWidth !== body.size[0] || img.naturalHeight !== body.size[1]){  // the outline must sit on these pixels
       traceNote("The photo's size changed on the way; please choose it again.", "bad"); return;
     }
-    Object.assign(trace, {photo, source:body.source, size:body.size, img, corners:body.corners, kind:body.suggestion, mode:"corners"});
-    traceNote(body.suggestion === "contour"
-      ? "Dashed corners: OpenCV's suggestion, not checked. Drag each one onto a corner of the opening."
-      : "Drag each orange corner onto a corner of the opening.", "ask");
-    $("#traceStage").hidden = false; $("#cornerActions").hidden = false; $("#lineActions").hidden = true;
-    drawTrace();
+    Object.assign(trace, {photo, source:body.source, size:body.size, img, corners:body.corners, mode:null,
+                          lines:T.levelLines(twin, trace.comp), sel:-1});
+    startOutline();
   }catch(err){ if(traceLive(my)) traceNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
   finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 });
-function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("decode")); i.src = src; }); }
 
-$("#cornersOk").onclick = async () => {
-  if(!trace || trace.mode !== "corners") return;
-  const my = trace.op = ops.start("trace"), corners = clone(trace.corners);  // these corners, as they are now
+function startOutline(){
+  trace.step = "outline";
+  stepTitle("Step 1 of 2: Outline the opening");
+  traceNote("Drag each named corner onto the matching corner of the opening, or drag a whole edge. The shape should cover the opening, not the door.", "ask");
+  $("#traceStage").hidden = false; $("#outlineActions").hidden = false; $("#lineActions").hidden = true;
+  drawTrace();
+}
+
+$("#outlineOk").onclick = async () => {  // OpenCV checks the outline and straightens the opening
+  if(!trace || trace.step !== "outline") return;
+  const my = trace.op = ops.start("trace"), corners = clone(trace.corners);
   $("#traceBusy").hidden = false;
   try{
     const r = await fetch("straighten", {method:"POST", headers:{"content-type":"application/json"},
       body:JSON.stringify({photo:trace.photo, corners, source:trace.source})});
     const body = await r.json();
     if(!traceLive(my)) return;
-    if(!r.ok){ traceNote((body.message || body.error) + (body.reason ? ` (${body.reason.replaceAll("_", " ")})` : ""), "bad"); return; }
-    const img = await loadImg("data:image/jpeg;base64," + body.image);
-    if(!traceLive(my)) return;
-    Object.assign(trace, {mode:"straightened", warped:img, matrix:body.matrix, targets:body.targets, confirmedCorners:corners});
-    startLines();
-    traceNote("OpenCV straightened the opening to a front view (shelves set back from it may sit slightly off). Drag the lines onto your shelves" + (body.targets.length ? "; green marks are edges OpenCV sees, and a line dropped near one lands on it." : "."), "ok");
+    if(!r.ok){ traceNote(OUTLINE_WHY[body.reason] || body.message || body.error, "bad"); return; }
+    Object.assign(trace, {mode:"straightened", confirmedCorners:corners, matrix:body.matrix, targets:body.targets || []});
+    startLines("OpenCV straightened the opening. Drag any line that is not on its shelf or drawer edge; add or remove lines if your fridge differs.");
   }catch{ if(traceLive(my)) traceNote("The photo could not be sent. Check the connection and try again.", "bad"); }
   finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 };
-$("#noStraighten").onclick = () => {
-  if(!trace || !trace.img) return;
-  trace.op = ops.start("trace");  // a pending straighten can no longer replace this choice
-  $("#traceBusy").hidden = true;
-  Object.assign(trace, {mode:"unstraightened", warped:trace.img, matrix:null, targets:[]});
-  startLines();
-  traceNote("Tracing on the photo itself: not straightened and not verified. Drag the lines onto your shelves.", "ask");
+const OUTLINE_WHY = {
+  too_small: "The outline is too small. Drag the corners out to the edges of the opening.",
+  too_slanted: "The outline is too slanted to straighten. Check each corner sits on the matching corner of the opening.",
+  too_foreshortened: "The outline is too squashed on one side. Take the photo more from the front, or check the corners.",
+  not_convex: "Two corners have crossed. Put each named corner on its own corner of the opening.",
+  not_ordered: "The corners are in the wrong places. Put each named corner on its own corner of the opening.",
+  outside_photo: "A corner is outside the photo.",
 };
-function startLines(){  // interior boundaries between the compartment's current levels
-  const lv = levelsOf(trace.comp);
-  trace.lines = lv.slice(0, -1).map(([id, l]) => ({y:l.floor, id}));
-  trace.sel = -1;
-  $("#cornerActions").hidden = true; $("#lineActions").hidden = false; $("#delLine").disabled = true;
+$("#noCorners").onclick = () => {  // trace on the photo as it is: lines follow the outline, nothing is straightened
+  if(!trace || trace.step !== "outline") return;
+  trace.op = ops.start("trace"); $("#traceBusy").hidden = true;
+  Object.assign(trace, {mode:"unstraightened", confirmedCorners:null, matrix:null, targets:[]});
+  startLines("Not straightened, so this layout is marked unverified. Place the outline where the opening would be and drag the lines onto your shelves.");
+};
+$("#backOutline").onclick = () => { if(trace){ trace.op = ops.start("trace"); startOutline(); } };
+
+function startLines(note){
+  trace.step = "lines"; trace.sel = -1;
+  stepTitle("Step 2 of 2: Match the shelves and drawers");
+  traceNote(note, trace.mode === "straightened" ? "ok" : "ask");
+  $("#outlineActions").hidden = true; $("#lineActions").hidden = false; $("#delLine").disabled = true;
   drawTrace();
 }
 
-function drawTrace(){
-  const cv = $("#traceCv"), ctx = cv.getContext("2d");
-  const lw = () => Math.max(2, cv.width / 300);
-  if(trace.mode === "corners"){
-    cv.width = trace.img.naturalWidth; cv.height = trace.img.naturalHeight;
-    ctx.drawImage(trace.img, 0, 0);
-    const q = trace.corners;
-    ctx.strokeStyle = css("--ask"); ctx.lineWidth = lw(); ctx.setLineDash([lw() * 4, lw() * 3]);
-    ctx.beginPath(); q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
-    for(const [x, y] of q){ ctx.fillStyle = css("--ask"); ctx.beginPath(); ctx.arc(x, y, lw() * 6, 0, 7); ctx.fill();
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = lw(); ctx.stroke(); }
-    return;
-  }
-  const img = trace.warped;
-  cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
-  for(const t of trace.targets){ ctx.fillStyle = css("--ok"); ctx.fillRect(0, t * cv.height - lw(), cv.width * 0.06, lw() * 2); ctx.fillRect(cv.width * 0.94, t * cv.height - lw(), cv.width * 0.06, lw() * 2); }
-  trace.lines.forEach((l, i) => {
-    ctx.strokeStyle = i === trace.sel ? css("--bad") : css("--accent"); ctx.lineWidth = lw() * (i === trace.sel ? 2.2 : 1.6);
-    ctx.beginPath(); ctx.moveTo(0, l.y * cv.height); ctx.lineTo(cv.width, l.y * cv.height); ctx.stroke();
-    ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(cv.width * 0.5, l.y * cv.height, lw() * 5, 0, 7); ctx.fill();
-  });
+function bandNames(){  // the spaces between the lines, named like the fridge drawing ("Shelf 1", "Drawer 2")
+  const vs = [...trace.lines].map(l => l.v).sort((a, b) => a - b), n = vs.length + 1;
+  const old = levelsOf(trace.comp);
+  if(old.length === n) return old.map(([id]) => levelName(id));
+  return Array.from({length:n}, (_, i) => `Space ${i + 1}`);
 }
 
-// one pointer handler for corners and lines (mouse, pen and touch)
+function drawTrace(){
+  const cv = $("#traceCv"), ctx = cv.getContext("2d"), img = trace.img;
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+  const lw = Math.max(2, cv.width / 300), fs = Math.round(cv.width / 32);
+  const q = trace.corners, m = T.squareToQuad(q);
+  ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.textBaseline = "middle";
+  const tag = (t, x, y, col) => {  // a readable name on any photo
+    const w = ctx.measureText(t).width + fs * 0.6;
+    x = Math.max(w / 2 + 2, Math.min(cv.width - w / 2 - 2, x)); y = Math.max(fs, Math.min(cv.height - fs, y));  // stay on the photo
+    ctx.fillStyle = "rgba(255,255,255,.88)"; ctx.fillRect(x - w / 2, y - fs * 0.7, w, fs * 1.4);
+    ctx.fillStyle = col; ctx.textAlign = "center"; ctx.fillText(t, x, y);
+  };
+  ctx.fillStyle = trace.step === "outline" ? "rgba(31,111,92,.28)" : "rgba(31,111,92,.12)";
+  ctx.beginPath(); q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#1f6f5c"; ctx.lineWidth = lw * (trace.step === "outline" ? 2 : 1.2); ctx.stroke();
+  if(trace.step === "outline"){
+    q.forEach(([x, y], i) => {
+      const [nx, ny] = q[(i + 1) % 4];
+      tag(EDGE_NAMES[i], (x + nx) / 2, (y + ny) / 2, "#1f6f5c");
+    });
+    q.forEach(([x, y], i) => {
+      ctx.fillStyle = "#c77700"; ctx.beginPath(); ctx.arc(x, y, lw * 7, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = lw; ctx.stroke();
+      tag(CORNER_NAMES[i], x + (i === 0 || i === 3 ? 1 : -1) * fs * 3.2, y + (i < 2 ? 1 : -1) * fs * 1.5, "#8a5a00");
+    });
+    return;
+  }
+  if(!m) return;
+  for(const t of trace.targets){ const [a] = T.lineOnPhoto(m, t); ctx.fillStyle = "#2e8b57"; ctx.fillRect(a[0] - lw * 6, a[1] - lw, lw * 6, lw * 2); }
+  const vs = trace.lines.map(l => l.v), order = [...vs.keys()].sort((a, b) => vs[a] - vs[b]);
+  order.forEach(i => {
+    const [a, b] = T.lineOnPhoto(m, vs[i]);
+    ctx.strokeStyle = i === trace.sel ? "#c0392b" : "#1f6f5c"; ctx.lineWidth = lw * (i === trace.sel ? 2.4 : 1.8);
+    ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+    const mid = T.applyH(m, [0.5, vs[i]]); ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(mid[0], mid[1], lw * 5, 0, 7); ctx.fill();
+  });
+  const sorted = order.map(i => vs[i]), bounds = [0, ...sorted, 1], names = bandNames();
+  names.forEach((nm, k) => { const p = T.applyH(m, [0.5, (bounds[k] + bounds[k + 1]) / 2]); tag(nm, p[0], p[1], "#1b221e"); });
+}
+
+// one pointer handler (mouse, pen, touch): corners first, then whole edges in step 1; lines in step 2
 (() => {
   const cv = $("#traceCv"); let drag = null;
   const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  const segDist = (p, a, b) => {
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  };
+  const clampPt = ([x, y]) => [Math.max(0, Math.min(cv.width, x)), Math.max(0, Math.min(cv.height, y))];
   cv.addEventListener("pointerdown", e => {
-    if(!trace || !trace.mode) return;
-    const [x, y] = at(e), reach = cv.width / 14;
-    if(trace.mode === "corners"){
+    if(!trace || !trace.step) return;
+    const p = at(e), reach = cv.width / 14;
+    if(trace.step === "outline"){
+      trace.op = ops.start("trace"); $("#traceBusy").hidden = true;  // moving the outline cancels a pending straighten
       let best = -1, d = reach;
-      trace.corners.forEach(([cx, cy], i) => { const k = Math.hypot(cx - x, cy - y); if(k < d){ d = k; best = i; } });
-      if(best >= 0){ trace.op = ops.start("trace"); $("#traceBusy").hidden = true; drag = {corner:best}; cv.setPointerCapture(e.pointerId); }  // moving a corner cancels a pending straighten
+      trace.corners.forEach((c, i) => { const k = Math.hypot(c[0] - p[0], c[1] - p[1]); if(k < d){ d = k; best = i; } });
+      if(best >= 0) drag = {corner:best};
+      else {
+        let edge = -1, de = reach / 2;
+        trace.corners.forEach((c, i) => { const k = segDist(p, c, trace.corners[(i + 1) % 4]); if(k < de){ de = k; edge = i; } });
+        if(edge >= 0) drag = {edge, from:p, start:clone(trace.corners)};
+      }
+      if(drag) cv.setPointerCapture(e.pointerId);
       return;
     }
-    let best = -1, d = reach;
-    trace.lines.forEach((l, i) => { const k = Math.abs(l.y * cv.height - y); if(k < d){ d = k; best = i; } });
+    const m = T.squareToQuad(trace.corners); if(!m) return;
+    let best = -1, d = reach / 2;
+    trace.lines.forEach((l, i) => { const [a, b] = T.lineOnPhoto(m, l.v); const k = segDist(p, a, b); if(k < d){ d = k; best = i; } });
     trace.sel = best; $("#delLine").disabled = best < 0;
     if(best >= 0){ drag = {line:best}; cv.setPointerCapture(e.pointerId); }
     drawTrace();
   });
   cv.addEventListener("pointermove", e => {
     if(!drag) return;
-    const [x, y] = at(e);
-    if(drag.corner !== undefined) trace.corners[drag.corner] = [Math.max(0, Math.min(cv.width, x)), Math.max(0, Math.min(cv.height, y))];
-    else trace.lines[drag.line].y = Math.max(0.01, Math.min(0.99, y / cv.height));
+    const p = at(e);
+    if(drag.corner !== undefined) trace.corners[drag.corner] = clampPt(p);
+    else if(drag.edge !== undefined){
+      const [dx, dy] = [p[0] - drag.from[0], p[1] - drag.from[1]], i = drag.edge, j = (i + 1) % 4;
+      trace.corners = clone(drag.start);
+      trace.corners[i] = clampPt([drag.start[i][0] + dx, drag.start[i][1] + dy]);
+      trace.corners[j] = clampPt([drag.start[j][0] + dx, drag.start[j][1] + dy]);
+    } else {
+      const v = T.vAt(T.squareToQuad(trace.corners), p);
+      if(v !== null) trace.lines[drag.line].v = Math.max(0.01, Math.min(0.99, v));
+    }
     drawTrace();
   });
   const up = () => {
-    if(drag && drag.line !== undefined){
+    if(drag && drag.line !== undefined && trace.targets.length){  // a line dropped right on an OpenCV edge lands on it
       const l = trace.lines[drag.line];
-      const t = trace.targets.reduce((b, t) => Math.abs(t - l.y) < Math.abs(b - l.y) ? t : b, Infinity);
-      if(Math.abs(t - l.y) <= SNAP) l.y = t;
+      const t = trace.targets.reduce((b, t) => Math.abs(t - l.v) < Math.abs(b - l.v) ? t : b, Infinity);
+      if(Math.abs(t - l.v) <= SNAP) l.v = t;
       drawTrace();
     }
     drag = null;
   };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
 })();
-$("#addLine").onclick = () => { if(!trace || !trace.lines) return; trace.lines.push({y:0.5, id:null}); trace.sel = trace.lines.length - 1; $("#delLine").disabled = false; drawTrace(); };
+$("#addLine").onclick = () => {  // a new line in the middle of the largest space
+  if(!trace || trace.step !== "lines") return;
+  const vs = [0, ...trace.lines.map(l => l.v).sort((a, b) => a - b), 1];
+  let k = 0; for(let i = 1; i < vs.length - 1; i++) if(vs[i + 1] - vs[i] > vs[k + 1] - vs[k]) k = i;
+  trace.lines.push({v:(vs[k] + vs[k + 1]) / 2, id:null}); trace.sel = trace.lines.length - 1; $("#delLine").disabled = false; drawTrace();
+};
 $("#delLine").onclick = () => { if(!trace || trace.sel < 0) return; trace.lines.splice(trace.sel, 1); trace.sel = -1; $("#delLine").disabled = true; drawTrace(); };
 
 $("#layoutOk").onclick = () => {
-  if(!trace || !trace.lines || !ops.live(trace.op)) return;
+  if(!trace || trace.step !== "lines" || !ops.live(trace.op)) return;
   const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
-  const res = T.applyTrace(twin, trace.comp, trace.lines.map(l => l.y), {mode:trace.mode, source:trace.source, size:trace.size,
-    corners:trace.mode === "straightened" ? trace.confirmedCorners : null, matrix:trace.matrix, template:tmpl.length});
-  if(res.error){ traceNote(res.error === "lines_too_close" ? "Two lines are almost on top of each other. Move or remove one." : "A line is outside the photo.", "bad"); return; }
+  const res = T.applyTrace(twin, trace.comp, trace.lines.map(l => l.v), {mode:trace.mode, source:trace.source, size:trace.size,
+    corners:trace.mode === "straightened" ? trace.confirmedCorners : null, outline:clone(trace.corners), matrix:trace.matrix, template:tmpl.length});
+  if(res.error){ traceNote(res.error === "lines_too_close" ? "Two lines are almost on top of each other. Move or remove one." : "A line is outside the outline.", "bad"); return; }
   if(!commit(res.next)) return;  // the compartment's revision moved on: scans asked for the old layout are refused
   const same = res.levels === tmpl.length;
   traceNote(`Saved: ${res.levels} levels. ${same ? "Agrees with the catalogue template's count." : `Differs from the catalogue template (${tmpl.length}).`}${res.moved ? ` ${res.moved} things moved to Unplaced.` : ""}`, "ok");
-  $("#lineActions").hidden = true;
+  $("#lineActions").hidden = true; trace.step = null;
   render();
 };
 
