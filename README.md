@@ -1,7 +1,7 @@
 # Glass Pantry Shelf Check (OpenCV AI Competition 2026)
 
 Photograph one fridge or pantry shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 checks the
-photo and the reading, picks the small labels and counts worth a second look, and has them re-read from the
+photo and the reading, picks the small labels worth a second look, and has them re-read from the
 full-resolution photo. What OpenCV finds decides the next action: **file** the list, **ask** the person, or ask for a
 **retake**. A person confirms before anything is kept.
 

@@ -11,7 +11,7 @@ markers: **built** (code and tests on this branch), **planned** (decided, not ye
 | 1. Identify the fridge | picks it from the list (model or generic type) | none | none | **built** |
 | 2. Load its layout | sees a flat front view: compartments, shelves, drawers, door bins | none | none (the app's catalogue as data, `web/layouts/layouts.json`) | **built** |
 | 3. Confirm the layout over a photo | one photo per compartment; places four corners, then the shelf lines; confirms | none | validates the quad; `warpPerspective` to a front view of the opening plane. Corner suggestions and edge snap targets are built but **off**: they failed their pre-set bar on the test photos (below) | **built** (`verifier/opening.py`, `POST /straighten`) |
-| 4. Fill a shelf, drawer or door bin | photographs it; edits and confirms the list | reads the items | photo gate; shelf check; zoom pass (small labels and counts re-read from the full photo) | **built** (`POST /scan`) |
+| 4. Fill a shelf, drawer or door bin | photographs it; edits and confirms the list | reads the items | photo gate; shelf check; zoom pass (small labels re-read from the full photo; count re-reads built but off after their test) | **built** (`POST /scan`) |
 
 Rules the page keeps (`web/fridge.html`):
 - **Suggestions are judged before they ship.** On the held-out test photos (hand truth, `tools/eval_trace.py`) the corner
