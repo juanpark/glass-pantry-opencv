@@ -105,6 +105,42 @@ def scan_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
     return res
 
 
+def identify_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
+    """One model call reads the fridge or its sticker; verifier.identify matches the reading to the catalogue."""
+    from verifier import claude, frames, identify
+    f = frames.canonical(jpeg)  # the API refuses an oversized image rather than resize it, so send the canonical frame
+    r = claude.call([claude.image_block(f.jpeg if f else jpeg), {"type": "text", "text": identify.PROMPT}], key,
+                    max_tokens=600, deadline=deadline)
+    reading = identify.read_answer(r["text"], r["stop"])
+    return {"reading": reading, "suggestions": identify.suggest(reading, identify.load_rows()) if reading else [],
+            "model_calls": 1, "cost_usd": r["cost"], "mode": "LIVE"}
+
+
+def _admitted(event, route, is_enabled, admitter):
+    """The guards every model route shares, in order: switch, size, a readable photo, then one admission from the
+    daily cap (fail closed). Returns (jpeg, None) or (None, response)."""
+    if not is_enabled():
+        _log(route=route, result="paused")
+        return None, _resp(503, {"error": "paused", "message": "Live scans are switched off. Try the recorded sample."})
+    if len(event.get("body") or "") > MAX_BYTES * 4 // 3 + 1024:
+        return None, _resp(413, {"error": "too_large", "message": "Photo too large; the page shrinks photos before sending."})
+    jpeg = _photo(event)
+    if not jpeg or len(jpeg) > MAX_BYTES:
+        return None, _resp(400, {"error": "bad_photo"})
+    from verifier.frames import decode
+    if decode(jpeg) is None:  # not a photo: refused before it uses any of today's allowance
+        return None, _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
+    try:
+        ok = admitter()
+    except Exception as e:  # the counter cannot be read: fail closed, never call the model uncounted
+        _log(route=route, result="admission_error", kind=type(e).__name__)
+        return None, _resp(503, {"error": "limit_unavailable", "message": "Live scans are unavailable right now."})
+    if not ok:
+        _log(route=route, result="daily_limit")
+        return None, _resp(429, {"error": "daily_limit", "message": "Today's live scans are used up. Try the recorded sample."})
+    return jpeg, None
+
+
 # OpenCV's suggestions, judged against hand truth on the test photos (tools/eval_trace.py, gate frozen 10/23):
 # both failed it on 10/23 (corners: worst corner 12-19% of the diagonal off; edges: 93% found but 3-15 spurious per
 # photo), so both are off and the person places corners and lines by hand. Straightening itself stays on.
@@ -187,7 +223,8 @@ def straighten(event, is_enabled, context=None) -> dict:
                        "targets": targets, "size": [w, h], "source": source})
 
 
-def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key):
+def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key,
+            identifier=identify_photo):
     http = (event.get("requestContext") or {}).get("http") or {}
     method, path = http.get("method", "GET"), event.get("rawPath", "/")
     if method == "GET" and path == "/":
@@ -203,25 +240,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, {**json.loads(p.read_text(encoding="utf-8")), "mode": "RECORDED"})
     if method == "POST" and path == "/scan":
         t0 = time.time()
-        if not is_enabled():
-            _log(route="scan", result="paused")
-            return _resp(503, {"error": "paused", "message": "Live scans are switched off. Try the recorded sample."})
-        if len(event.get("body") or "") > MAX_BYTES * 4 // 3 + 1024:
-            return _resp(413, {"error": "too_large", "message": "Photo too large; the page shrinks photos before sending."})
-        jpeg = _photo(event)
-        if not jpeg or len(jpeg) > MAX_BYTES:
-            return _resp(400, {"error": "bad_photo"})
-        from verifier.frames import decode
-        if decode(jpeg) is None:  # not a photo: refused before it uses any of today's allowance
-            return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
-        try:
-            ok = admitter()
-        except Exception as e:  # the counter cannot be read: fail closed, never scan uncounted
-            _log(route="scan", result="admission_error", kind=type(e).__name__)
-            return _resp(503, {"error": "limit_unavailable", "message": "Live scans are unavailable right now."})
-        if not ok:
-            _log(route="scan", result="daily_limit")
-            return _resp(429, {"error": "daily_limit", "message": "Today's live scans are used up. Try the recorded sample."})
+        jpeg, refused = _admitted(event, "scan", is_enabled, admitter)
+        if refused:
+            return refused
         deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None
         try:
             res = scanner(jpeg, key(), deadline=deadline)
@@ -229,6 +250,20 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
             _log(route="scan", result="error", kind=type(e).__name__, ms=round((time.time() - t0) * 1000))
             return _resp(502, {"error": "model_unavailable"})
         _log(route="scan", result=res["action"], why=len(res["why"]), calls=res.get("model_calls"),
+             cost=res.get("cost_usd"), ms=round((time.time() - t0) * 1000))
+        return _resp(200, res)
+    if method == "POST" and path == "/identify":
+        t0 = time.time()
+        jpeg, refused = _admitted(event, "identify", is_enabled, admitter)
+        if refused:
+            return refused
+        deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None
+        try:
+            res = identifier(jpeg, key(), deadline=deadline)
+        except Exception as e:  # never echo model text or photo data
+            _log(route="identify", result="error", kind=type(e).__name__, ms=round((time.time() - t0) * 1000))
+            return _resp(502, {"error": "model_unavailable"})
+        _log(route="identify", result="read" if res.get("reading") else "unread", suggestions=len(res["suggestions"]),
              cost=res.get("cost_usd"), ms=round((time.time() - t0) * 1000))
         return _resp(200, res)
     if method == "GET" and path == "/fridge":

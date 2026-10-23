@@ -134,4 +134,5 @@ def test_the_fridge_picker_leads_with_brand_and_model_number():
     labels = dict(zip([r["key"] for r in rows], json.loads(out)))
     assert labels["model:samsung-rb38j-bottom"].startswith("Samsung RB38J7200S4 · ")
     assert labels["model:lg-dios-4door"].startswith("LG M874GBB252 · ")
-    assert labels["template:standard"] == "Generic: standard"
+    assert labels["template:standard"] == "Generic: fridge on top, freezer below"
+    assert all(not v.startswith("Generic: ") or " " in v[9:] for v in labels.values())  # every generic has a plain name
