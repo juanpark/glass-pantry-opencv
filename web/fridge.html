@@ -270,7 +270,7 @@ function render(){
   svg.setAttribute("viewBox", `-4 -4 ${total + 8} ${H + 40}`);
   el("rect", {x:0, y:0, width:W, height:H, rx:14, fill:css("--cab"), stroke:css("--line"), "stroke-width":3}, svg);
   for(const c of r.compartments){
-    const [bx, by, , bw, bh] = c.box_mm;  // fractions of the cabinet; y from the bottom
+    const [bx, by, , bw, bh] = c.box;  // fractions of the inner volume, origin left-bottom-back
     const x = bx * W + 10, y = (1 - by - bh) * H + 10, w = bw * W - 20, h = bh * H - 20;
     el("rect", {x, y, width:w, height:h, rx:6, fill:css(c.kind === "freezer" ? "--freezer" : "--cold"), stroke:css("--line"), "stroke-width":2}, svg);
     const t = twin.traced[c.id];

@@ -5,7 +5,7 @@ from pathlib import Path
 LAYOUTS = Path(__file__).resolve().parent.parent / "web" / "layouts" / "layouts.json"
 # Exported from the Glass Pantry app at commit 6913119 (assets/catalogue/fronts.json sha256 169575b9...) by
 # tools/export_layouts_test.dart, which also checks parity with the app's filing destinations. Re-export, never edit.
-SHA256 = "59ce7bfa26b4bcf55dc89068537cf636bd8cb4fb4ecbbdd9305e08af4b6efc04"
+SHA256 = "38600ae194c9ddbeb25bc490c97a7694522761de35d821ee198018d5fd780006"
 
 
 def test_the_layout_manifest_is_the_exported_one():
@@ -36,3 +36,9 @@ def test_the_fridge_page_is_served():
     from service import handler as h
     r = h.handler({"rawPath": "/fridge", "requestContext": {"http": {"method": "GET"}}})
     assert r["statusCode"] == 200 and "Glass Pantry Fridge" in r["body"]
+
+
+def test_boxes_are_normalized_fractions_not_millimetres():
+    for row in json.loads(LAYOUTS.read_text(encoding="utf-8")):
+        for c in row["compartments"]:
+            assert "box_mm" not in c and len(c["box"]) == 6 and all(0 <= v <= 1 for v in c["box"]), row["key"]

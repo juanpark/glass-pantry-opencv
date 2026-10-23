@@ -125,10 +125,21 @@ def test_route_falls_back_to_the_inner_margin_and_says_so():
     assert s == 200 and b["suggestion"] == "margin" and b["status"] == "suggested"
 
 
+def canonical_corners(img, q):
+    """The suggestion call gives the canonical frame's size and source; corners are sent in that frame."""
+    _, sug = call(ev({"photo": jpeg(img)}))
+    k = sug["size"][0] / img.shape[1]
+    return (q * k).tolist(), sug["source"], k
+
+
 def test_route_straightens_the_persons_corners():
     img, q = opening_photo()
-    s, b = call(ev({"photo": jpeg(img), "corners": q.tolist()}))
+    corners, source, k = canonical_corners(img, q)
+    s, b = call(ev({"photo": jpeg(img), "corners": corners, "source": source}))
     assert s == 200 and b["status"] == "straightened"
+    got = cv2.perspectiveTransform(np.array([corners], np.float64), np.array(b["matrix"]))[0]
+    ow, oh = b["image_size"]
+    assert np.allclose(got, [[0, 0], [ow - 1, 0], [ow - 1, oh - 1], [0, oh - 1]], atol=1e-6)
     m = np.array(b["matrix"])
     assert m.shape == (3, 3)
     out = cv2.imdecode(np.frombuffer(base64.b64decode(b["image"]), np.uint8), cv2.IMREAD_COLOR)
@@ -138,14 +149,64 @@ def test_route_straightens_the_persons_corners():
 
 def test_route_refuses_bad_corners_with_the_reason_and_no_image():
     img, _ = opening_photo()
-    s, b = call(ev({"photo": jpeg(img), "corners": [[500, 500], [700, 500], [700, 700], [500, 700]]}))
+    _, source, _ = canonical_corners(img, np.zeros((4, 2)))
+    s, b = call(ev({"photo": jpeg(img), "corners": [[500, 500], [700, 500], [700, 700], [500, 700]], "source": source}))
     assert s == 422 and b["error"] == "cannot_straighten" and b["reason"] == "too_small" and "image" not in b
 
 
-def test_route_rejects_corners_for_another_photo():
+@pytest.mark.parametrize("source", ["0" * 16, None, "missing", 5])
+def test_route_refuses_corners_not_bound_to_this_photo(source, monkeypatch):
     img, q = opening_photo()
-    s, b = call(ev({"photo": jpeg(img), "corners": q.tolist(), "source": "0" * 16}))
-    assert s == 409 and b["error"] == "source_mismatch"
+    corners, _, _ = canonical_corners(img, q)
+    monkeypatch.setattr(op, "warp", lambda *a, **k: pytest.fail("no warp for unbound corners"))
+    body = {"photo": jpeg(img), "corners": corners}
+    if source != "missing":
+        body["source"] = source
+    s, b = call(ev(body))
+    assert s == 409 and b["error"] == "source_mismatch" and "image" not in b
+
+
+def test_corners_for_a_replaced_photo_are_refused(monkeypatch):
+    img, q = opening_photo()
+    corners, source, _ = canonical_corners(img, q)
+    other, _ = opening_photo(lines=(0.4,))
+    monkeypatch.setattr(op, "warp", lambda *a, **k: pytest.fail("no warp"))
+    s, b = call(ev({"photo": jpeg(other), "corners": corners, "source": source}))
+    assert s == 409
+
+
+@pytest.mark.parametrize("corners", [[[10 ** 400, 1], [2, 3], [4, 5], [6, 7]], [[1, 2, 3], [4, 5, 6]], "abc", [[None, 1]] * 4])
+def test_malformed_corners_are_refused_cleanly(corners, capsys):
+    img, q = opening_photo()
+    _, source, _ = canonical_corners(img, q)
+    s, b = call(ev({"photo": jpeg(img), "corners": corners, "source": source}))
+    assert s == 422 and b["error"] == "cannot_straighten" and "image" not in b
+    assert "400" not in capsys.readouterr().out.replace('"ms"', "")
+
+
+class Ctx:
+    def __init__(self, ms):
+        self.ms = ms
+
+    def get_remaining_time_in_millis(self):
+        return self.ms
+
+
+def test_no_time_left_refuses_before_any_work(monkeypatch):
+    img, q = opening_photo()
+    monkeypatch.setattr(op, "propose", lambda *a, **k: pytest.fail("no contour search without time"))
+    r = h.handler(ev({"photo": jpeg(img)}), Ctx(500), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and json.loads(r["body"])["error"] == "out_of_time"
+
+
+def test_time_running_out_before_the_warp_stops_there(monkeypatch):
+    img, q = opening_photo()
+    corners, source, _ = canonical_corners(img, q)
+    t = iter([0.0, 0.0, 100.0, 100.0, 100.0])
+    monkeypatch.setattr(h.time, "monotonic", lambda: next(t, 100.0))
+    monkeypatch.setattr(op, "warp", lambda *a, **k: pytest.fail("no warp after the budget"))
+    r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and json.loads(r["body"])["error"] == "out_of_time"
 
 
 def test_route_is_switched_off_with_the_owner_switch():
@@ -161,6 +222,8 @@ def test_route_refuses_what_is_not_a_photo():
 
 def test_route_logs_no_coordinates(capsys):
     img, q = opening_photo()
-    call(ev({"photo": jpeg(img), "corners": q.tolist()}))
+    corners, source, _ = canonical_corners(img, q)
+    capsys.readouterr()
+    call(ev({"photo": jpeg(img), "corners": corners, "source": source}))
     out = capsys.readouterr().out
     assert "straighten" in out and str(int(q[0][0])) not in out.replace('"ms"', "")

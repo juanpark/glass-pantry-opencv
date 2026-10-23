@@ -35,6 +35,8 @@ def validate(quad, w: int, h: int) -> str | None:
         q = np.asarray(quad, dtype=np.float64).reshape(4, 2)
     except (ValueError, TypeError):
         return "not_four_points"
+    except OverflowError:
+        return "not_finite"
     if not np.isfinite(q).all():
         return "not_finite"
     if (q[:, 0] < 0).any() or (q[:, 0] > w).any() or (q[:, 1] < 0).any() or (q[:, 1] > h).any():

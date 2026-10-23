@@ -30,7 +30,8 @@ void main() {
               'id': c.id,
               'name': {'ko': c.name.ko, 'en': c.name.en},
               'kind': c.kind.name,
-              'box_mm': [c.box.x, c.box.y, c.box.z, c.box.w, c.box.h, c.box.d],
+              // Fractions of the appliance's inner volume, origin left-bottom-back (app front.dart Box3), not millimetres.
+              'box': [c.box.x, c.box.y, c.box.z, c.box.w, c.box.h, c.box.d],
               'levels': [
                 for (final (i, l) in c.levels.indexed)
                   {'id': '${c.id}/L$i', 'kind': l.kind.name, 'top': l.top, 'floor': l.floor, 'label': l.label},

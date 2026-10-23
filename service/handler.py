@@ -105,11 +105,24 @@ def scan_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
     return res
 
 
-def straighten(event, is_enabled) -> dict:
+STRAIGHTEN_RESERVE = 2.0  # seconds kept to encode and return the answer
+STRAIGHTEN_MIN = 1.5  # a stage does not start with less than this left
+
+
+def straighten(event, is_enabled, context=None) -> dict:
     """Step 3 of plan v4: OpenCV only, no model call, not counted. Without corners it *suggests* four (never
     accepts them); with the person's corners it straightens the opening plane and offers snap targets. Corners are
-    in the canonical frame's pixels and bound to its `source`."""
+    in the canonical frame's pixels and must carry the `source` of that frame."""
     t0 = time.time()
+    deadline = (time.monotonic() + context.get_remaining_time_in_millis() / 1000 - STRAIGHTEN_RESERVE
+                if context else None)
+
+    def out_of_time() -> bool:
+        return deadline is not None and deadline - time.monotonic() < STRAIGHTEN_MIN
+
+    if out_of_time():
+        _log(route="straighten", result="out_of_time")
+        return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
     if not is_enabled():
         _log(route="straighten", result="paused")
         return _resp(503, {"error": "paused", "message": "The live page is switched off. Try the recorded sample."})
@@ -128,15 +141,18 @@ def straighten(event, is_enabled) -> dict:
         return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
     w, h = f.size
     source = hashlib.sha256(f.jpeg).hexdigest()[:16]
-    corners = req.get("corners")
+    corners = req.get("corners") if isinstance(req, dict) else None
     if corners is None:
+        if out_of_time():
+            _log(route="straighten", result="out_of_time")
+            return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
         q = opening.propose(f.image)
         kind = "contour" if q is not None else "margin"
         q = q if q is not None else opening.fallback(w, h)
         _log(route="straighten", result="suggested", kind=kind, ms=round((time.time() - t0) * 1000))
         return _resp(200, {"status": "suggested", "suggestion": kind, "corners": [[round(x, 1), round(y, 1)] for x, y in q],
                            "size": [w, h], "source": source})
-    if req.get("source") not in (None, source):
+    if req.get("source") != source:  # corners without their photo's binding are never applied
         _log(route="straighten", result="source_mismatch")
         return _resp(409, {"error": "source_mismatch", "message": "These corners belong to another photo."})
     reason = opening.validate(corners, w, h)
@@ -144,6 +160,9 @@ def straighten(event, is_enabled) -> dict:
         _log(route="straighten", result="refused", reason=reason)
         return _resp(422, {"error": "cannot_straighten", "reason": reason,
                            "message": "Can't straighten with these corners. Move them, or trace on the photo instead."})
+    if out_of_time():
+        _log(route="straighten", result="out_of_time")
+        return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
     import cv2
     wp = opening.warp(f.image, corners)
     ok, buf = cv2.imencode(".jpg", wp.image, [cv2.IMWRITE_JPEG_QUALITY, 88])
@@ -203,5 +222,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
                      "application/json; charset=utf-8")
     if method == "POST" and path == "/straighten":
-        return straighten(event, is_enabled)
+        try:
+            return straighten(event, is_enabled, context)
+        except Exception as e:  # a malformed request never becomes an invocation failure, and nothing is echoed
+            _log(route="straighten", result="error", kind=type(e).__name__)
+            return _resp(400, {"error": "bad_request"})
     return _resp(404, {"error": "not_found"})
