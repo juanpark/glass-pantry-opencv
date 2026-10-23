@@ -485,17 +485,28 @@ $("#layoutOk").onclick = () => {
   if(ys.some((y, i) => i && y - ys[i - 1] < 0.03)){ traceNote("Two lines are almost on top of each other. Move or remove one.", "bad"); return; }
   const bounds = [0, ...ys, 1];
   const next = clone(twin);
-  const old = levelsOf(trace.comp);  // matched top to bottom by order; extra old ones retire, extra new ones are added
+  const old = levelsOf(trace.comp);
   const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
   const moved = [];
-  for(let i = 0; i < bounds.length - 1; i++){
+  // Each new band keeps the old level it overlaps most (one to one, largest overlaps first), so removing a line
+  // merges the two levels it divided into one that keeps an id, and the level that loses goes to Unplaced.
+  const bands = bounds.slice(0, -1).map((b, i) => [b, bounds[i + 1]]);
+  const pairs = [];
+  bands.forEach(([t, f], i) => old.forEach(([id, l], j) => {
+    const o = Math.min(f, l.floor) - Math.max(t, l.top);
+    if(o > 0) pairs.push([o, i, j]);
+  }));
+  pairs.sort((a, b) => b[0] - a[0]);
+  const bandOf = {}, taken = new Set();
+  for(const [, i, j] of pairs) if(!(i in bandOf) && !taken.has(j)){ bandOf[i] = j; taken.add(j); }
+  bands.forEach(([t, f], i) => {
     let id;
-    if(i < old.length) id = old[i][0];
+    if(i in bandOf) id = old[bandOf[i]][0];
     else { id = `${trace.comp}/N${next.next++}`; next.levels[id] = {comp:trace.comp, kind:"shelf", from:"added"}; }
-    Object.assign(next.levels[id], {top:bounds[i], floor:bounds[i + 1], order:i});
+    Object.assign(next.levels[id], {top:t, floor:f, order:i});
     delete next.levels[id].retired;
-  }
-  for(const [id] of old.slice(bounds.length - 1)){  // a removed level keeps its things, in Unplaced
+  });
+  for(const [id] of old.filter((_, j) => !taken.has(j))){  // a removed level keeps its things, in Unplaced
     next.levels[id].retired = true;
     for(const it of next.items[id] || []) moved.push({...it, was:id});
     delete next.items[id];
