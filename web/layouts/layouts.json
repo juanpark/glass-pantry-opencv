@@ -1,0 +1,2660 @@
+[
+ {
+  "key": "model:samsung-bespoke-4door",
+  "version": 3,
+  "brand": "삼성",
+  "model": "비스포크 AI 4도어 (RF85DB90B1AP)",
+  "typical": false,
+  "source": "samsung.com/sec/support/model/RF85DB90B1AP (912×1853×916; 522/177/176 L; pockets 6/3/3); height split, plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 155 mm deep inside — French-door / side-by-side class median 155 mm (3 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   912,
+   1853,
+   916
+  ],
+  "compartments": [
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.409,
+     0.0,
+     1.0,
+     0.591,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.5,
+     0.39899999999999997,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "flex",
+    "name": {
+     "ko": "맞춤보관실",
+     "en": "Flex zone"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.5,
+     0.0,
+     0.0,
+     0.5,
+     0.39899999999999997,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "flex/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "flex/L1",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "flex/L2",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "coldL",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.409,
+     0.5,
+     0.591
+    ],
+    "pockets": [
+     {
+      "id": "coldL/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldL/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldL/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldR",
+    "opens": "cold",
+    "rect": [
+     0.5,
+     0.409,
+     0.5,
+     0.591
+    ],
+    "pockets": [
+     {
+      "id": "coldR/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldR/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldR/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     0.5,
+     0.38399999999999995
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "flexDoor",
+    "opens": "flex",
+    "rect": [
+     0.5,
+     0.025,
+     0.5,
+     0.38399999999999995
+    ],
+    "pockets": [
+     {
+      "id": "flexDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "flexDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "flexDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:lg-dios-4door",
+  "version": 3,
+  "brand": "LG",
+  "model": "디오스 4도어 (M874GBB252)",
+  "typical": false,
+  "source": "danawa M874GBB252 (914×1860×918, 872 L); pockets 3 per door and lower interiors are the class default (Samsung RF85), unverified for LG; cold interior kept from v0; height split, plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from lge.co.kr M874GBB252 spec JSON (냉장 505, 냉동 367 for both lower rooms) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 155 mm deep inside — French-door / side-by-side class median 155 mm (3 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   914,
+   1860,
+   918
+  ],
+  "compartments": [
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.427,
+     0.0,
+     1.0,
+     0.573,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.5,
+     0.417,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "flex",
+    "name": {
+     "ko": "맞춤보관실",
+     "en": "Flex zone"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.5,
+     0.0,
+     0.0,
+     0.5,
+     0.417,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "flex/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "flex/L1",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "coldL",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.427,
+     0.5,
+     0.573
+    ],
+    "pockets": [
+     {
+      "id": "coldL/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldL/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldL/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldR",
+    "opens": "cold",
+    "rect": [
+     0.5,
+     0.427,
+     0.5,
+     0.573
+    ],
+    "pockets": [
+     {
+      "id": "coldR/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldR/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldR/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     0.5,
+     0.40199999999999997
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "flexDoor",
+    "opens": "flex",
+    "rect": [
+     0.5,
+     0.025,
+     0.5,
+     0.40199999999999997
+    ],
+    "pockets": [
+     {
+      "id": "flexDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "flexDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "flexDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:samsung-sidebyside",
+  "version": 3,
+  "brand": "삼성",
+  "model": "양문형 (RS84DG5002M9)",
+  "typical": false,
+  "source": "samsung.com/sec/support/model/RS84DG5002M9 (912×1780×892; 532/320 L; 4 shelves + 2 boxes, 5 pockets each); width split, plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 155 mm deep inside — French-door / side-by-side class median 155 mm (3 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   912,
+   1780,
+   892
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.376,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.16,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "shelf",
+      "top": 0.16,
+      "floor": 0.32,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "shelf",
+      "top": 0.32,
+      "floor": 0.48,
+      "label": null
+     },
+     {
+      "id": "freezer/L3",
+      "kind": "shelf",
+      "top": 0.48,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "freezer/L4",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "freezer/L5",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.376,
+     0.0,
+     0.0,
+     0.624,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.16,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.16,
+      "floor": 0.32,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.32,
+      "floor": 0.48,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "shelf",
+      "top": 0.48,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L5",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     0.376,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.376,
+     0.025,
+     0.624,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:lg-dios-sidebyside",
+  "version": 3,
+  "brand": "LG",
+  "model": "디오스 양문형 (S834MEE111)",
+  "typical": false,
+  "source": "danawa / lge.co.kr S834MEE111 (913×1790×913); split and 5+5 pockets are the class default, unverified for LG; interior levels kept from the v0 defaults (cold 3+2, freezer 4+0), unresearched; plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from lge.co.kr S834MEE111 spec JSON (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 155 mm deep inside — French-door / side-by-side class median 155 mm (3 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   913,
+   1790,
+   913
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.37,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.3333333333333333,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "shelf",
+      "top": 0.3333333333333333,
+      "floor": 0.6666666666666666,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "shelf",
+      "top": 0.6666666666666666,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.37,
+     0.0,
+     0.0,
+     0.63,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     0.37,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.37,
+     0.025,
+     0.63,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "template:sideBySide",
+  "version": 3,
+  "brand": null,
+  "model": null,
+  "typical": true,
+  "source": "class average 912×1780×900; split, pockets and interior levels (4+2 / 4+2) from the RS84 sheet as the class reference (an estimate for the class, not a measurement of any one fridge); v2 10/9: litres from the median of five maker sheets (RS84DG5002M9, RS82M6000SA, RS63R557EB4, LG S834MEE111, LG S656MQQ143) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 155 mm deep inside — French-door / side-by-side class median 155 mm (3 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   912,
+   1780,
+   900
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.375,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.16,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "shelf",
+      "top": 0.16,
+      "floor": 0.32,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "shelf",
+      "top": 0.32,
+      "floor": 0.48,
+      "label": null
+     },
+     {
+      "id": "freezer/L3",
+      "kind": "shelf",
+      "top": 0.48,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "freezer/L4",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "freezer/L5",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.375,
+     0.0,
+     0.0,
+     0.625,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.16,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.16,
+      "floor": 0.32,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.32,
+      "floor": 0.48,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "shelf",
+      "top": 0.48,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L5",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     0.375,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.375,
+     0.025,
+     0.625,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.8,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.6,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.4,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.2,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p5",
+      "bottom": 0.0,
+      "height": 0.2,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "template:standard",
+  "version": 3,
+  "brand": null,
+  "model": null,
+  "typical": true,
+  "source": "class from RB33A3004AP / RB30D4051S9 / M301S31 (RESEARCH-fridge-catalogue §2.1); freezer share from capacity; cold interior and pocket counts kept from v0, freezer 1 shelf + 2 baskets and 2 pockets from the class; estimates as the family; v2 10/9: litres from the median of five maker sheets (RB33A3004AP, RB30D4051S9, RB38J7200S4, LG M341S53, LG M301S31) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 110 mm deep inside — 60 cm bottom-freezer class 110 mm, inferred (no source for this class), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   595,
+   1853,
+   665
+  ],
+  "compartments": [
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.325,
+     0.0,
+     1.0,
+     0.675,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.315,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.34187500000000004,
+     1.0,
+     0.658125
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.025,
+     1.0,
+     0.316875
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.5,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.0,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "template:freezerTop",
+  "version": 3,
+  "brand": null,
+  "model": null,
+  "typical": true,
+  "source": "class from RT38K5039SL / B502W33 (RESEARCH-fridge-catalogue §2.1); RT38 interior and pockets as the class reference; v2 10/9: litres from Samsung RT38K5039SL (the class is bimodal, 600 vs 780 wide; RT38 matches this row's size) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 125 mm deep inside — top-freezer class median 125 mm (4 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   680,
+   1790,
+   670
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.771,
+     0.0,
+     1.0,
+     0.229,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.5,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "shelf",
+      "top": 0.5,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.761,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.128,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.128,
+      "floor": 0.256,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.256,
+      "floor": 0.384,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "shelf",
+      "top": 0.384,
+      "floor": 0.512,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "shelf",
+      "top": 0.512,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L5",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.776725,
+     1.0,
+     0.223275
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.5,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.0,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.025,
+     1.0,
+     0.751725
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.75,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.5,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.25,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.0,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:samsung-2door",
+  "version": 3,
+  "brand": "삼성",
+  "model": "일반 2도어 (RT38K5039SL)",
+  "typical": false,
+  "source": "samsung.com/sec/support/model/RT38K5039SL (675×1785×668; 293/88 L; 5 shelves + 1 box, 4 pockets; 1 shelf, 2 pockets); freezer share from capacity; plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 125 mm deep inside — top-freezer class median 125 mm (4 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   675,
+   1785,
+   668
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.771,
+     0.0,
+     1.0,
+     0.229,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.761,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.128,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.128,
+      "floor": 0.256,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.256,
+      "floor": 0.384,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "shelf",
+      "top": 0.384,
+      "floor": 0.512,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "shelf",
+      "top": 0.512,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L5",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.776725,
+     1.0,
+     0.223275
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.5,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.0,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.025,
+     1.0,
+     0.751725
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.75,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.5,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.25,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.0,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:samsung-rb38j-bottom",
+  "version": 4,
+  "brand": "삼성",
+  "model": "슬림스타일 상냉장·하냉동 (RB38J7200S4)",
+  "typical": false,
+  "source": "samsung.com/sec/support/model/RB38J7200S4 (595×1927×650; 401 L = 냉장 257 + 냉동 144; 냉장 박스 2, 냉동 박스 3) and the sibling manual DA68-03174A (3 shelves, 2 drawers, 3 freezer drawers); sticker read 10/9 (RESEARCH-juan-fridge §0); freezer share from capacity; pocket rows from Juan's door photo; plinth, pocket depth and handles as the family; v2 10/9: litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 110 mm deep inside — 60 cm bottom-freezer class 110 mm, inferred (no source for this class), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1); v4 10/12 (docs/PLAN-door-fit.md slice R): a room without door bins reaches its flat door (doorZone perRoom); recalibrated to the same litres under that rule; door bins 140 mm inside and a door of about 60 mm, measured on a unit (Juan 10/12, build-log 'Juan's door, by hand and by photo'), so the door zone is 200 mm; fitted 10/12 by fitRoomWalls (walls nearest 45 mm with every room within 5 % and the total within 3 %): walls 41 mm; slice R2 10/12 (docs/RESEARCH-freezer-walls.md): freezer walls 57 mm (freezer grade 1.4x the shell, a heuristic) and a 105 mm back setback (an estimated effective plane for the evaporator, fan duct and compressor step, fitted to the maker's litres, not measured), door split kept at the real 0.366 — cold box ≈ 245 L (−4.5 %: the maker's 257 L counts the door bins), freezer ≈ 144 L, total −2.6 %",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   595,
+   1927,
+   650
+  ],
+  "compartments": [
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.366,
+     0.0,
+     1.0,
+     0.634,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.356,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "drawer",
+      "top": 0.0,
+      "floor": 0.3076923076923077,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "drawer",
+      "top": 0.3076923076923077,
+      "floor": 0.6153846153846154,
+      "label": null
+     },
+     {
+      "id": "freezer/L2",
+      "kind": "drawer",
+      "top": 0.6153846153846154,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.38185,
+     1.0,
+     0.61815
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.75,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.5,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.25,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p4",
+      "bottom": 0.0,
+      "height": 0.25,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:lg-2door",
+  "version": 3,
+  "brand": "LG",
+  "model": "일반 2도어 (B502W33)",
+  "typical": false,
+  "source": "danawa pcode 15690737 B502W33 (780×1800×730, 507 L); interior, pockets and freezer share kept from v0 / class, unresearched for LG; plinth, pocket spacing/depth and handles estimated; v2 10/9: litres from lge.co.kr B502W33 spec JSON (Danawa agrees) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 125 mm deep inside — top-freezer class median 125 mm (4 sources), capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   780,
+   1800,
+   730
+  ],
+  "compartments": [
+   {
+    "id": "freezer",
+    "name": {
+     "ko": "냉동실",
+     "en": "Freezer"
+    },
+    "kind": "freezer",
+    "box_mm": [
+     0.0,
+     0.744,
+     0.0,
+     1.0,
+     0.256,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "freezer/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.5,
+      "label": null
+     },
+     {
+      "id": "freezer/L1",
+      "kind": "shelf",
+      "top": 0.5,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.734,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 0.8,
+      "label": null
+     },
+     {
+      "id": "cold/L4",
+      "kind": "drawer",
+      "top": 0.8,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "freezerDoor",
+    "opens": "freezer",
+    "rect": [
+     0.0,
+     0.7504000000000001,
+     1.0,
+     0.2496
+    ],
+    "pockets": [
+     {
+      "id": "freezerDoor/p1",
+      "bottom": 0.5,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "freezerDoor/p2",
+      "bottom": 0.0,
+      "height": 0.5,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.025,
+     1.0,
+     0.7254
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:samsung-1door-small",
+  "version": 3,
+  "brand": "삼성",
+  "model": "소형 1도어 (RR09BG014WW)",
+  "typical": false,
+  "source": "danawa pcode 17245886 RR09BG014WW (479×842×446, 89 L); shelves 2 and pockets 2 kept from v0, unresearched; plinth, pocket spacing/depth and handle estimated; v2 10/9: outer size 475×842×448 from samsung.com/sec/support/model/RR09BG014WW (was retailer 479×842×446); 3 door guards; litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12: door bins 76 mm deep inside — the door zone allows 76 mm (96 − 20); class value 110 inferred, capped at the door zone less 20 mm (docs/RESEARCH-door-bins.md; plan .agents/plan_door_bins.md R1)",
+  "name": {
+   "ko": "냉장고",
+   "en": "Refrigerator"
+  },
+  "mm": [
+   475,
+   842,
+   448
+  ],
+  "compartments": [
+   {
+    "id": "cold",
+    "name": {
+     "ko": "냉장실",
+     "en": "Fridge"
+    },
+    "kind": "cold",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "cold/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "cold/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "cold/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "cold/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   }
+  ],
+  "panels": [
+   {
+    "id": "coldDoor",
+    "opens": "cold",
+    "rect": [
+     0.0,
+     0.025,
+     1.0,
+     0.975
+    ],
+    "pockets": [
+     {
+      "id": "coldDoor/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "coldDoor/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "model:samsung-kimchi-plus-stand",
+  "version": 3,
+  "brand": "삼성",
+  "model": "김치플러스 스탠드형 (RQ48T94A1AP)",
+  "typical": false,
+  "source": "samsung.com/sec/support/model/RQ48T94A1AP (795×1853×794; 292/103/91 L; 3 shelves; doors without bins); height shares from capacity; plinth and handles estimated; v2 10/9: 도어가드 6 EA (3 per upper door), 웰빙존 boxes ×2 (one drawer level) per the maker sheet RQ48T94A1AP; litres from the maker sheet (RESEARCH-reference-fridges / -juan-fridge); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived; v3 10/12 (docs/PLAN-door-fit.md slice R): a room without door bins reaches its flat door (doorZone perRoom); recalibrated to the same litres under that rule; fitted 10/12 (fit_catalogue_test): shell 135, upperShare 0.586 — upper 292, middle 103, lower 91 L",
+  "name": {
+   "ko": "김치냉장고",
+   "en": "Kimchi fridge"
+  },
+  "mm": [
+   795,
+   1853,
+   794
+  ],
+  "compartments": [
+   {
+    "id": "upper",
+    "name": {
+     "ko": "위칸",
+     "en": "Top"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.0,
+     0.41400000000000003,
+     0.0,
+     1.0,
+     0.586,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "upper/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.21333333333333335,
+      "label": null
+     },
+     {
+      "id": "upper/L1",
+      "kind": "shelf",
+      "top": 0.21333333333333335,
+      "floor": 0.4266666666666667,
+      "label": null
+     },
+     {
+      "id": "upper/L2",
+      "kind": "shelf",
+      "top": 0.4266666666666667,
+      "floor": 0.64,
+      "label": null
+     },
+     {
+      "id": "upper/L3",
+      "kind": "drawer",
+      "top": 0.64,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "middle",
+    "name": {
+     "ko": "중간칸",
+     "en": "Middle"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.18988,
+     0.0,
+     1.0,
+     0.20912000000000003,
+     1.0
+    ],
+    "levels": []
+   },
+   {
+    "id": "lower",
+    "name": {
+     "ko": "아래칸",
+     "en": "Bottom"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.18488,
+     1.0
+    ],
+    "levels": []
+   }
+  ],
+  "panels": [
+   {
+    "id": "upperL",
+    "opens": "upper",
+    "rect": [
+     0.0,
+     0.4286500000000001,
+     0.5,
+     0.5713499999999999
+    ],
+    "pockets": [
+     {
+      "id": "upperL/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "upperL/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "upperL/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   },
+   {
+    "id": "upperR",
+    "opens": "upper",
+    "rect": [
+     0.5,
+     0.4286500000000001,
+     0.5,
+     0.5713499999999999
+    ],
+    "pockets": [
+     {
+      "id": "upperR/p1",
+      "bottom": 0.6666666666666666,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "upperR/p2",
+      "bottom": 0.3333333333333333,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     },
+     {
+      "id": "upperR/p3",
+      "bottom": 0.0,
+      "height": 0.3333333333333333,
+      "u": 0.0,
+      "w": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "template:kimchi",
+  "version": 2,
+  "brand": null,
+  "model": null,
+  "typical": true,
+  "source": "class from RQ48T94A1AP / Z490MEEF11 / WDQ57JBNTER (RESEARCH-fridge-catalogue §2.1); French top + 2 drawers; shares and plinth estimated; v2 10/9: litres from the median of six maker sheets (RQ48, Z490, Z495, Z509, WDQ57JBNTER, EDQ47; total only) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived",
+  "name": {
+   "ko": "김치냉장고",
+   "en": "Kimchi fridge"
+  },
+  "mm": [
+   810,
+   1860,
+   810
+  ],
+  "compartments": [
+   {
+    "id": "upper",
+    "name": {
+     "ko": "위칸",
+     "en": "Top"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.0,
+     0.42000000000000004,
+     0.0,
+     1.0,
+     0.58,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "upper/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.3333333333333333,
+      "label": null
+     },
+     {
+      "id": "upper/L1",
+      "kind": "shelf",
+      "top": 0.3333333333333333,
+      "floor": 0.6666666666666666,
+      "label": null
+     },
+     {
+      "id": "upper/L2",
+      "kind": "shelf",
+      "top": 0.6666666666666666,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "middle",
+    "name": {
+     "ko": "중간칸",
+     "en": "Middle"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.20500000000000002,
+     0.0,
+     1.0,
+     0.2,
+     1.0
+    ],
+    "levels": []
+   },
+   {
+    "id": "lower",
+    "name": {
+     "ko": "아래칸",
+     "en": "Bottom"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.2,
+     1.0
+    ],
+    "levels": []
+   }
+  ],
+  "panels": []
+ },
+ {
+  "key": "model:lg-kimchi-toktok-stand",
+  "version": 2,
+  "brand": "LG",
+  "model": "디오스 김치톡톡 스탠드형 (Z490MEEF11)",
+  "typical": false,
+  "source": "danawa pcode 99125183 Z490MEEF11 (835×1860×838, 491 L, 4도어 4룸); height shares and shelves per room estimated / kept from v0, unresearched; plinth and handles estimated; v2 10/9: litres from lge.co.kr Z490MEEF11 spec JSON (total only) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived",
+  "name": {
+   "ko": "김치냉장고",
+   "en": "Kimchi fridge"
+  },
+  "mm": [
+   835,
+   1795,
+   838
+  ],
+  "compartments": [
+   {
+    "id": "upperL",
+    "name": {
+     "ko": "왼쪽 위칸",
+     "en": "Top left"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.0,
+     0.42000000000000004,
+     0.0,
+     0.495,
+     0.58,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "upperL/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.5,
+      "label": null
+     },
+     {
+      "id": "upperL/L1",
+      "kind": "shelf",
+      "top": 0.5,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "upperR",
+    "name": {
+     "ko": "오른쪽 위칸",
+     "en": "Top right"
+    },
+    "kind": "convertible",
+    "box_mm": [
+     0.505,
+     0.42000000000000004,
+     0.0,
+     0.495,
+     0.58,
+     1.0
+    ],
+    "levels": [
+     {
+      "id": "upperR/L0",
+      "kind": "shelf",
+      "top": 0.0,
+      "floor": 0.5,
+      "label": null
+     },
+     {
+      "id": "upperR/L1",
+      "kind": "shelf",
+      "top": 0.5,
+      "floor": 1.0,
+      "label": null
+     }
+    ]
+   },
+   {
+    "id": "middle",
+    "name": {
+     "ko": "중간칸",
+     "en": "Middle"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.20500000000000002,
+     0.0,
+     1.0,
+     0.2,
+     1.0
+    ],
+    "levels": []
+   },
+   {
+    "id": "lower",
+    "name": {
+     "ko": "아래칸",
+     "en": "Bottom"
+    },
+    "kind": "drawerBin",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.2,
+     1.0
+    ],
+    "levels": []
+   }
+  ],
+  "panels": []
+ },
+ {
+  "key": "template:kimchiChest",
+  "version": 2,
+  "brand": null,
+  "model": null,
+  "typical": true,
+  "source": "class from 딤채 NDL22KTWNS and the 딤채 뚜껑형 family (RESEARCH-fridge-catalogue §2.1); two lids per \"2도어\"; v2 10/9: litres from the median of five (NDL22KTWNS, WDL22JEWNSS, LDL22HLSFE, LG K225MB131, K220S111; total only) (RESEARCH-reference-fridges §0); thickness and shares fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived",
+  "name": {
+   "ko": "김치냉장고",
+   "en": "Kimchi fridge"
+  },
+  "mm": [
+   1000,
+   900,
+   600
+  ],
+  "compartments": [
+   {
+    "id": "wellL",
+    "name": {
+     "ko": "왼쪽 칸",
+     "en": "Left"
+    },
+    "kind": "well",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.495,
+     1.0,
+     1.0
+    ],
+    "levels": []
+   },
+   {
+    "id": "wellR",
+    "name": {
+     "ko": "오른쪽 칸",
+     "en": "Right"
+    },
+    "kind": "well",
+    "box_mm": [
+     0.5,
+     0.0,
+     0.0,
+     0.5,
+     1.0,
+     1.0
+    ],
+    "levels": []
+   }
+  ],
+  "panels": []
+ },
+ {
+  "key": "model:winia-dimchae-chest",
+  "version": 2,
+  "brand": "위니아",
+  "model": "딤채 뚜껑형 2도어 (NDL22KTWNS)",
+  "typical": false,
+  "source": "danawa pcode 71427818 NDL22KTWNS (1040×910×600, 221 L, 8 tubs, 뚜껑형 2도어); lid handles estimated; v2 10/9: litres: 221 L total from the retailer (Danawa, NDL22KTWNS) — the maker publishes none; structure facts from the maker's sibling NDL22JEWQS (RESEARCH-reference-fridges §5); thickness fitted by test/tool/fit_catalogue_test.dart (main-box litre calibration, door bins not counted; overestimates the main cavity where the declared figure includes door storage); inner sizes derived",
+  "name": {
+   "ko": "김치냉장고",
+   "en": "Kimchi fridge"
+  },
+  "mm": [
+   1040,
+   910,
+   600
+  ],
+  "compartments": [
+   {
+    "id": "wellL",
+    "name": {
+     "ko": "왼쪽 칸",
+     "en": "Left"
+    },
+    "kind": "well",
+    "box_mm": [
+     0.0,
+     0.0,
+     0.0,
+     0.495,
+     1.0,
+     1.0
+    ],
+    "levels": []
+   },
+   {
+    "id": "wellR",
+    "name": {
+     "ko": "오른쪽 칸",
+     "en": "Right"
+    },
+    "kind": "well",
+    "box_mm": [
+     0.5,
+     0.0,
+     0.0,
+     0.5,
+     1.0,
+     1.0
+    ],
+    "levels": []
+   }
+  ],
+  "panels": []
+ }
+]

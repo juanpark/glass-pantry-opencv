@@ -105,6 +105,54 @@ def scan_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict:
     return res
 
 
+def straighten(event, is_enabled) -> dict:
+    """Step 3 of plan v4: OpenCV only, no model call, not counted. Without corners it *suggests* four (never
+    accepts them); with the person's corners it straightens the opening plane and offers snap targets. Corners are
+    in the canonical frame's pixels and bound to its `source`."""
+    t0 = time.time()
+    if not is_enabled():
+        _log(route="straighten", result="paused")
+        return _resp(503, {"error": "paused", "message": "The live page is switched off. Try the recorded sample."})
+    if len(event.get("body") or "") > MAX_BYTES * 4 // 3 + 1024:
+        return _resp(413, {"error": "too_large"})
+    try:
+        raw = event.get("body") or ""
+        req = json.loads(base64.b64decode(raw) if event.get("isBase64Encoded") else raw)
+        jpeg = base64.b64decode(req["photo"])
+    except Exception:
+        return _resp(400, {"error": "bad_photo"})
+    from verifier import frames, opening
+    import hashlib
+    f = frames.canonical(jpeg) if len(jpeg) <= MAX_BYTES else None
+    if f is None:
+        return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
+    w, h = f.size
+    source = hashlib.sha256(f.jpeg).hexdigest()[:16]
+    corners = req.get("corners")
+    if corners is None:
+        q = opening.propose(f.image)
+        kind = "contour" if q is not None else "margin"
+        q = q if q is not None else opening.fallback(w, h)
+        _log(route="straighten", result="suggested", kind=kind, ms=round((time.time() - t0) * 1000))
+        return _resp(200, {"status": "suggested", "suggestion": kind, "corners": [[round(x, 1), round(y, 1)] for x, y in q],
+                           "size": [w, h], "source": source})
+    if req.get("source") not in (None, source):
+        _log(route="straighten", result="source_mismatch")
+        return _resp(409, {"error": "source_mismatch", "message": "These corners belong to another photo."})
+    reason = opening.validate(corners, w, h)
+    if reason:
+        _log(route="straighten", result="refused", reason=reason)
+        return _resp(422, {"error": "cannot_straighten", "reason": reason,
+                           "message": "Can't straighten with these corners. Move them, or trace on the photo instead."})
+    import cv2
+    wp = opening.warp(f.image, corners)
+    ok, buf = cv2.imencode(".jpg", wp.image, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    _log(route="straighten", result="straightened", ms=round((time.time() - t0) * 1000))
+    return _resp(200, {"status": "straightened", "image": base64.b64encode(buf.tobytes()).decode(),
+                       "image_size": [wp.image.shape[1], wp.image.shape[0]], "matrix": wp.matrix.tolist(),
+                       "targets": opening.snap_targets(wp.image), "size": [w, h], "source": source})
+
+
 def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key):
     http = (event.get("requestContext") or {}).get("http") or {}
     method, path = http.get("method", "GET"), event.get("rawPath", "/")
@@ -149,4 +197,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         _log(route="scan", result=res["action"], why=len(res["why"]), calls=res.get("model_calls"),
              cost=res.get("cost_usd"), ms=round((time.time() - t0) * 1000))
         return _resp(200, res)
+    if method == "GET" and path == "/layouts.json":
+        return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
+                     "application/json; charset=utf-8")
+    if method == "POST" and path == "/straighten":
+        return straighten(event, is_enabled)
     return _resp(404, {"error": "not_found"})
