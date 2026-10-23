@@ -292,6 +292,8 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, (ROOT / "web" / "fridge.html").read_text(encoding="utf-8"), "text/html; charset=utf-8")
     if method == "GET" and path == "/twin.js":
         return _resp(200, (ROOT / "web" / "twin.js").read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
+    if method == "GET" and path in ("/scene.js", "/twin3d.js"):
+        return _resp(200, (ROOT / "web" / path[1:]).read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
     if method == "GET" and path == "/layouts.json":
         return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
                      "application/json; charset=utf-8")

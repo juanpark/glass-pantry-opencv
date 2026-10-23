@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Glass Pantry Fridge</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
 /* Plan v4 R3: pick the fridge -> trace each compartment over its photo -> fill each shelf, drawer or door bin.
    One column; the fridge drawing is the home screen, every task opens beneath it. */
@@ -107,6 +108,8 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
     </div>
     <p class="muted">Tap a shelf, drawer or door bin to fill it from a photo. Use <b>Trace</b> on a compartment to fit its shelves to your fridge.</p>
     <div id="traceButtons" class="row"></div>
+    <div class="row"><button id="view3dBtn" type="button" class="small">3D view</button></div>
+    <div id="view3d" hidden style="height:min(70vh,560px);border:1px solid var(--line);border-radius:8px;overflow:hidden"></div>
     <svg id="fridge" role="group" aria-label="Fridge drawing"></svg>
     <div id="unplacedBox" hidden>
       <h2 style="font-size:.95rem">Unplaced</h2>
@@ -319,8 +322,22 @@ function levelName(id){  // "Shelf 2", "Drawer 1": numbered within its kind, top
 function clip(t, n){ return t.length > n ? t.slice(0, n - 1) + "…" : t; }
 function count(id){ return (twin.items[id] || []).length; }
 
+let view3d = null;  // the 3D view: drawn from the same twin, read-only, loaded only when asked for
+async function draw3d(){
+  if(view3d){ view3d.dispose(); view3d = null; }
+  if($("#view3d").hidden || !twin) return;
+  $("#view3d").textContent = "";
+  try{ const m = await import("./twin3d.js"); if(!$("#view3d").hidden && !view3d) view3d = m.mount($("#view3d"), twin, row(twin.key)); }
+  catch{ $("#view3d").textContent = "The 3D view could not load here; the drawing below shows the same fridge."; }
+}
+$("#view3dBtn").onclick = () => {
+  $("#view3d").hidden = !$("#view3d").hidden;
+  $("#view3dBtn").textContent = $("#view3d").hidden ? "3D view" : "Hide 3D view";
+  draw3d();
+};
 function render(){
   const r = row(twin.key);
+  if(!$("#view3d").hidden) draw3d();
   $("#fridgeCard").hidden = false;
   const svg = $("#fridge"); svg.innerHTML = "";
   const H = 1000, W = Math.round(H * r.mm[0] / r.mm[1]);
@@ -741,6 +758,15 @@ function showScan(res, url, my){
   $("#fillList").hidden = false;
 }
 
+function placement(itemId){  // where the item stood in its shelf photo (fractions), for the 3D view only
+  const it = ((fill.res.proposal || {}).items || []).find(x => x.id === itemId);
+  const fr = (fill.res.trace || []).find(s => s.step === "frames");
+  if(!it) return {};
+  const out = typeof it.vessel === "string" ? {vessel: it.vessel} : {};
+  if(!fr || !Array.isArray(fr.size) || !Array.isArray(it.box) || it.box.length !== 4 || !it.box.every(Number.isFinite)) return out;
+  const [x0, y0, x1, y1] = it.box, [w, h] = fr.size;
+  return {...out, xFrac: (x0 + x1) / 2 / w, wFrac: (x1 - x0) / w, hFrac: (y1 - y0) / h};
+}
 $("#fillOk").onclick = () => {
   if(!fill || !fill.res || !ops.live(fill.op)) return;
   const source = fill.res.proposal && fill.res.proposal.source;
@@ -751,7 +777,7 @@ $("#fillOk").onclick = () => {
     tr.children[3].querySelector("input").style.borderColor = c.ok ? "" : "var(--bad)";
     if(!c.ok){ bad.push(tr); continue; }
     add.push({appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
-              count:c.value, source, at:Date.now()});
+              count:c.value, source, at:Date.now(), ...placement(tr.dataset.id)});
   }
   if(bad.length){ fillNote("A count must be a whole number of 1 or more, or left blank if you are not sure.", "bad"); return; }
   const r = T.addItems(twin, fill.ticket, add);  // same fridge, same holder, same layout as when the photo was chosen

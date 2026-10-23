@@ -190,3 +190,19 @@ def test_every_way_of_choosing_a_fridge_withdraws_an_open_switch_question():
     init = _body(p, "async function init(){", "\n}\n")
     assert "T.isTwin(" in p[p.index("function load(){"):p.index("function commit(")]
     assert init.index('addEventListener("change", gate)') < init.index("render()")  # consent works even if drawing fails
+
+
+def test_the_3d_view_is_lazy_read_only_and_served():
+    """Slice 5: the 3D view loads only when opened, has a failure note, and confirmed rows keep where they stood."""
+    import json
+    from service import handler as h
+    p = _page()
+    d3 = _body(p, "async function draw3d(){", "\n}")
+    assert 'import("./twin3d.js")' in d3 and "could not load" in d3
+    assert "commit(" not in d3 and "T.commit(" not in d3
+    assert "...placement(tr.dataset.id)" in p
+    for path in ("/scene.js", "/twin3d.js"):
+        r = h.handler({"rawPath": path, "requestContext": {"http": {"method": "GET"}}})
+        assert r["statusCode"] == 200 and r["headers"]["content-type"].startswith("text/javascript")
+    wf = (__import__("pathlib").Path(__file__).resolve().parent.parent / ".github/workflows/deploy.yml").read_text()
+    assert "tests/js/scene.test.mjs" in wf
