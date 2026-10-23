@@ -27,11 +27,13 @@ h2{font-size:1.05rem;margin:0}
 p{margin:0;max-width:70ch}
 .muted{color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
+.card>*{min-width:0}  /* a wide table or a long option never widens the page; it scrolls or wraps inside */
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row>*{min-width:0}
 .chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
 .live{color:var(--ok)} .off{color:var(--grey)} .warn{color:var(--ask)}
 button,.btn,select{font:600 .92rem var(--sans);border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
-select{font-weight:500;max-width:100%}
+select{font-weight:500;max-width:100%;text-overflow:ellipsis}
 button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.small{padding:4px 9px;font-size:.8rem}
 button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
@@ -110,6 +112,7 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <h2 style="font-size:.95rem">Unplaced</h2>
       <p class="muted" style="font-size:.85rem">Things from a shelf you removed or from a fridge you replaced. Nothing is ever thrown away.</p>
       <ul class="items" id="unplaced"></ul>
+      <div id="unplacedNote" class="note" hidden></div>
     </div>
   </section>
 
@@ -174,14 +177,17 @@ const clone = o => JSON.parse(JSON.stringify(o));
 // ---------- storage: a save is believed only after it is read back (twin.js commit) ----------
 function store(){ try{ return window.sessionStorage; }catch{ return null; } }
 function load(){
-  try{ const t = JSON.parse(store().getItem(T.KEY) || "null"); return t && t.v === 1 ? t : null; }catch{ return null; }
+  try{
+    const t = JSON.parse(store().getItem(T.KEY) || "null");
+    return T.isTwin(t) ? t : null;  // never draw from, or write over, something this page cannot read
+  }catch{ return null; }
 }
-function commit(next){
-  const say = t => { $("#saveState").textContent = t; };
+function commit(next, note){  // `note`: the card the person is using, so a refused save is said where they look
+  const say = (t, failed = true) => { $("#saveState").textContent = t; if(failed && note) note(t, "bad"); };
   if(broken){ say("Saving is paused: this tab could not confirm what it stored. Reload the page to check your fridge."); return false; }
   const st = store();
   const r = st ? T.commit(st, T.KEY, next) : {ok:false, durable:"unchanged"};
-  if(r.ok){ twin = next; say("Saved in this tab."); return true; }
+  if(r.ok){ twin = next; say("Saved in this tab.", false); return true; }
   if(r.durable === "unknown"){
     broken = true;
     say("Not saved, and this tab could not confirm what it stored. Saving is paused; reload the page to check your fridge.");
@@ -219,21 +225,29 @@ async function init(){
     sel.append(og);
   }
   twin = load();
+  let had = null; try{ had = store().getItem(T.KEY); }catch{}
+  if(!twin && had){  // something is stored but it is not a fridge this page can read: say so, never draw from it
+    $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
+    $("#modelNote").textContent = "The fridge saved in this tab could not be read. Pick a fridge to start again.";
+  }
   if(twin && (!row(twin.key) || twin.layouts !== LAYOUT_SHA)){  // never reinterpret a saved fridge under other data
     $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
     $("#modelNote").textContent = "The saved fridge was made with a different layout list. Pick a fridge to start again; everything it held moves to Unplaced.";
     stale = twin; twin = null;
   }
-  if(twin){ sel.value = twin.key; render(); }
-  $("#consent").addEventListener("change", gate);
+  $("#consent").addEventListener("change", gate);  // consent works whatever happens to the drawing
   gate();
+  if(twin){ sel.value = twin.key; render(); }
 }
 function gate(){
   const on = $("#consent").checked;
   for(const id of ["tracePick", "fillPick", "identifyPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
 }
 
-$("#model").addEventListener("change", () => showSource());
+function selectModel(key){  // every way of choosing a fridge (the list, an identify suggestion) withdraws an open question
+  $("#model").value = key; $("#modelNote").hidden = true; showSource();
+}
+$("#model").addEventListener("change", () => selectModel($("#model").value));
 function showSource(){
   const r = row($("#model").value); if(!r) return;
   $("#modelSource").textContent = (r.key.startsWith("template:") ? "Generic layout. " : "") + "Layout from Glass Pantry's catalogue (" + r.key + "@" + r.version + "); some sizes are estimates. Trace fits it to your fridge.";
@@ -261,7 +275,7 @@ $("#identifyPick").addEventListener("change", async e => {
       li.innerHTML = `<div class="row" style="gap:6px"><b></b><button class="small" type="button">Choose</button></div><span class="muted" style="font-size:.82rem"></span>`;
       li.querySelector("b").textContent = label(row(s.key));
       li.querySelector("span").textContent = s.reason;
-      li.querySelector("button").onclick = () => { $("#model").value = s.key; showSource(); $("#useModel").focus(); };
+      li.querySelector("button").onclick = () => { selectModel(s.key); $("#useModel").focus(); };
       list.append(li);
     }
     list.hidden = false;
@@ -270,7 +284,7 @@ $("#identifyPick").addEventListener("change", async e => {
 });
 function switchTo(r){  // a new fridge keeps everything the old one(s) held, in Unplaced; pending work is cancelled
   const next = T.replaceModel([twin, stale], r, LAYOUT_SHA);
-  if(!commit(next)) return;
+  if(!commit(next, modelNoteSay)) return;
   stale = null; ops.cancel(); trace = null; fill = null;
   $("#identifyBusy").hidden = true;  // a read still in flight is stale now; its answer is ignored
   $("#traceCard").hidden = true; $("#fillCard").hidden = true; $("#modelNote").hidden = true;
@@ -286,7 +300,7 @@ $("#useModel").addEventListener("click", () => {
     note.innerHTML = `<p></p><div class="row" style="margin-top:8px"><button class="small primary" type="button">Move everything to Unplaced and switch</button><button class="small" type="button">Keep my fridge</button></div>`;
     note.querySelector("p").textContent = `Your fridge holds ${held} things. Switching keeps them all, in Unplaced.`;
     const [yes, no] = note.querySelectorAll("button");
-    yes.onclick = () => switchTo(r);
+    yes.onclick = () => { if($("#model").value !== r.key){ note.hidden = true; return; } switchTo(r); };  // only the fridge still shown
     no.onclick = () => { note.hidden = true; $("#model").value = twin.key; };
     return;
   }
@@ -343,7 +357,7 @@ function render(){
     const col = i % 2, x = W + GAP + col * DW, [, pv, , ph] = p.rect;
     const y = (1 - pv - ph) * H, h = ph * H;
     el("rect", {x, y, width:DW - 8, height:h, rx:8, fill:css("--door"), stroke:css("--line"), "stroke-width":2}, svg);
-    const t = el("text", {x:x + 6, y:y + 18, "font-size":14, fill:css("--muted")}, svg); t.textContent = `${p.id} door (template positions)`;
+    const t = el("text", {x:x + 6, y:y + 18, "font-size":14, fill:css("--muted")}, svg); t.textContent = "Door bins";
     p.pockets.forEach((q, k) => {
       const qy = y + (1 - q.bottom - q.height) * h + 24, qh = q.height * h - 28;
       const g = el("g", {class:"lvl", tabindex:0, role:"button", "aria-label":`door bin ${q.id}: ${count(q.id)} things`}, svg);
@@ -374,8 +388,9 @@ function renderUnplaced(){  // each thing can be renamed and put back on a live 
     for(const id of liveHolders()){ const o = document.createElement("option"); o.value = id; o.textContent = holderName(id); sel.append(o); }
     li.querySelector("button").onclick = () => {
       const r = T.placeUnplaced(twin, i, sel.value, {label: inp.value.trim() || null});
-      if(r.error){ $("#saveState").textContent = "That place no longer exists. Pick another."; return; }
-      if(commit(r.next)) render();
+      if(r.error){ unplacedNote("That place no longer exists. Pick another.", "bad"); return; }
+      unplacedNote("");
+      if(commit(r.next, unplacedNote)) render();
     };
     ul.append(li);
   });
@@ -437,6 +452,9 @@ $("#tracePick").addEventListener("change", async e => {
     if(!r.ok){ traceNote(body.message || "The engine said: " + body.error, "bad"); return; }
     const img = await loadImg(URL.createObjectURL(blob));
     if(!traceLive(my)) return;
+    if(Math.min(img.naturalWidth, img.naturalHeight) < MIN_TRACE){  // nothing on it could be dragged or read
+      traceNote(`This photo is too small to trace (${img.naturalWidth}×${img.naturalHeight}). Choose a photo of the whole compartment.`, "bad"); return;
+    }
     if(img.naturalWidth !== body.size[0] || img.naturalHeight !== body.size[1]){  // the outline must sit on these pixels
       traceNote("The photo's size changed on the way; please choose it again.", "bad"); return;
     }
@@ -447,6 +465,7 @@ $("#tracePick").addEventListener("change", async e => {
   finally{ if(traceLive(my)) $("#traceBusy").hidden = true; }
 });
 
+const MIN_TRACE = 300;  // px on the shorter side, after the page's resize
 function startOutline(){
   trace.step = "outline";
   stepTitle("Step 1 of 2: Outline the opening");
@@ -483,7 +502,7 @@ const OUTLINE_WHY = {
 $("#noCorners").onclick = () => {  // trace on the photo as it is: lines follow the outline, nothing is straightened
   if(!trace || trace.step !== "outline") return;
   trace.op = ops.start("trace"); $("#traceBusy").hidden = true;
-  const bad = T.outlineProblem(trace.corners);  // not straightened, but the lines are still drawn through the outline
+  const bad = T.outlineProblem(trace.corners, trace.size);  // not straightened, but the lines are still drawn through the outline
   if(bad){ traceNote(OUTLINE_WHY[bad], "bad"); return; }
   Object.assign(trace, {mode:"unstraightened", confirmedCorners:null, matrix:null, targets:[]});
   startLines("Not straightened, so this layout is marked unverified. Place the outline where the opening would be and drag the lines onto your shelves.");
@@ -506,7 +525,7 @@ function bandNames(){  // the spaces between the lines, named exactly as Confirm
 function drawTrace(){
   const cv = $("#traceCv"), ctx = cv.getContext("2d"), img = trace.img;
   cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
-  const lw = Math.max(2, cv.width / 300), fs = Math.round(cv.width / 32);
+  const lw = Math.max(2, cv.width / 300), fs = Math.round(Math.min(cv.width / 32, cv.height / 14));  // a wide photo too
   const q = trace.corners, m = T.squareToQuad(q);
   ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.textBaseline = "middle";
   const tag = (t, x, y, col) => {  // a readable name on any photo
@@ -543,6 +562,7 @@ function drawTrace(){
   names.forEach((nm, k) => { const p = T.applyH(m, [0.5, (bounds[k] + bounds[k + 1]) / 2]); tag(nm, p[0], p[1], "#1b221e"); });
 }
 
+const FINGER = 22;  // CSS px: half a fingertip, the reach of a touch on a line or an edge
 // one pointer handler (mouse, pen, touch): corners first, then whole edges in step 1; lines in step 2
 (() => {
   const cv = $("#traceCv"); let drag = null;
@@ -554,14 +574,16 @@ function drawTrace(){
   const clampPt = ([x, y]) => [Math.max(0, Math.min(cv.width, x)), Math.max(0, Math.min(cv.height, y))];
   cv.addEventListener("pointerdown", e => {
     if(!trace || !trace.step) return;
-    const p = at(e), reach = cv.width / 14;
+    const px = cv.width / cv.getBoundingClientRect().width;  // canvas pixels per CSS pixel
+    const finger = e.pointerType === "touch" ? FINGER * px : 0;  // a fingertip covers more than a mouse tip
+    const p = at(e), reach = Math.max(cv.width / 14, finger * 1.5);
     if(trace.step === "outline"){
       trace.op = ops.start("trace"); $("#traceBusy").hidden = true;  // moving the outline cancels a pending straighten
       let best = -1, d = reach;
       trace.corners.forEach((c, i) => { const k = Math.hypot(c[0] - p[0], c[1] - p[1]); if(k < d){ d = k; best = i; } });
       if(best >= 0) drag = {corner:best};
       else {
-        let edge = -1, de = reach / 2;
+        let edge = -1, de = Math.max(reach / 2, finger);
         trace.corners.forEach((c, i) => { const k = segDist(p, c, trace.corners[(i + 1) % 4]); if(k < de){ de = k; edge = i; } });
         if(edge >= 0) drag = {edge, from:p, start:clone(trace.corners)};
       }
@@ -569,7 +591,7 @@ function drawTrace(){
       return;
     }
     const m = T.squareToQuad(trace.corners); if(!m) return;
-    let best = -1, d = reach / 2;
+    let best = -1, d = Math.max(reach / 2, finger);
     trace.lines.forEach((l, i) => { const [a, b] = T.lineOnPhoto(m, l.v); const k = segDist(p, a, b); if(k < d){ d = k; best = i; } });
     trace.sel = best; $("#delLine").disabled = best < 0;
     if(best >= 0){ drag = {line:best}; cv.setPointerCapture(e.pointerId); }
@@ -611,13 +633,13 @@ $("#delLine").onclick = () => { if(!trace || trace.sel < 0) return; trace.lines.
 
 $("#layoutOk").onclick = () => {
   if(!trace || trace.step !== "lines" || !ops.live(trace.op)) return;
-  const bad = T.outlineProblem(trace.corners);
+  const bad = T.outlineProblem(trace.corners, trace.size);
   if(bad){ traceNote(OUTLINE_WHY[bad] + " Go back to the outline.", "bad"); return; }
   const tmpl = row(twin.key).compartments.find(c => c.id === trace.comp).levels;
   const res = T.applyTrace(twin, trace.comp, trace.lines.map(l => l.v), {mode:trace.mode, source:trace.source, size:trace.size,
     corners:trace.mode === "straightened" ? trace.confirmedCorners : null, outline:clone(trace.corners), matrix:trace.matrix, template:tmpl.length});
   if(res.error){ traceNote(res.error === "lines_too_close" ? "Two lines are almost on top of each other. Move or remove one." : "A line is outside the outline.", "bad"); return; }
-  if(!commit(res.next)) return;  // the compartment's revision moved on: scans asked for the old layout are refused
+  if(!commit(res.next, traceNote)) return;  // the compartment's revision moved on: scans asked for the old layout are refused
   const same = res.levels === tmpl.length;
   traceNote(`Saved: ${res.levels} levels. ${same ? "Agrees with the catalogue template's count." : `Differs from the catalogue template (${tmpl.length}).`}${res.moved ? ` ${res.moved} things moved to Unplaced.` : ""}`, "ok");
   $("#lineActions").hidden = true; trace.step = null;
@@ -644,6 +666,8 @@ function openFill(id){
 }
 $("#fillClose").onclick = () => { fill = null; ops.start("fill"); $("#fillCard").hidden = true; };
 const fillLive = op => fill && ops.live(op);
+function unplacedNote(text, kind = ""){ const n = $("#unplacedNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
+function modelNoteSay(text, kind = ""){ const n = $("#modelNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
 function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
 
 $("#fillPick").addEventListener("change", async e => {
@@ -735,7 +759,7 @@ $("#fillOk").onclick = () => {
     fillNote(r.error === "other_fridge" ? "You changed the fridge while this photo was read. Nothing was added."
       : "This shelf changed while the photo was read (re-traced or removed). Nothing was added; photograph it again.", "bad"); return;
   }
-  if(!commit(r.next)) return;
+  if(!commit(r.next, fillNote)) return;
   fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
   $("#fillList").hidden = true; fill.res = null;
   openFillKeep();
