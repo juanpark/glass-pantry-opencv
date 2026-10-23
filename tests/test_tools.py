@@ -118,3 +118,20 @@ def test_the_page_refuses_an_unusable_outline_and_names_spaces_as_saved():
     assert confirm.index("T.outlineProblem(") < confirm.index("T.applyTrace(")
     bands = page[page.index("function bandNames()"):page.index("function drawTrace()")]
     assert "T.traceNames(" in bands and not re.search(r"levelsOf|levelName", bands)
+
+
+def test_the_fridge_picker_leads_with_brand_and_model_number():
+    """Juan 10/23: RB38J was not findable on the iPhone picker, which cut the model number off the end."""
+    import json
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    page = (root / "web" / "fridge.html").read_text(encoding="utf-8")
+    src = page[page.index("function label(r){"):page.index("async function init()")]
+    rows = json.loads((root / "web" / "layouts" / "layouts.json").read_text())
+    out = subprocess.run(["node", "-e", src + "\nconsole.log(JSON.stringify(R.map(label)))".replace("R", json.dumps(rows), 1)],
+                         capture_output=True, text=True, check=True).stdout
+    labels = dict(zip([r["key"] for r in rows], json.loads(out)))
+    assert labels["model:samsung-rb38j-bottom"].startswith("Samsung RB38J7200S4 · ")
+    assert labels["model:lg-dios-4door"].startswith("LG M874GBB252 · ")
+    assert labels["template:standard"] == "Generic: standard"

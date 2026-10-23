@@ -186,8 +186,12 @@ function commit(next){
 function row(key){ return LAYOUTS.find(r => r.key === key); }
 function label(r){
   if(r.key.startsWith("template:")) return `Generic: ${r.key.slice(9)}`;
-  return `${r.brand || ""} ${r.model || r.key}`.trim();
+  // brand and model number first: a phone's picker cuts long names off at the end ("Samsung RB38J7200S4 · 슬림스타일 …")
+  const code = (r.model || "").match(/\(([^)]+)\)\s*$/), name = (r.model || r.key).replace(/\s*\([^)]+\)\s*$/, "");
+  const brand = BRAND_EN[r.brand] || r.brand || "";
+  return code ? `${brand} ${code[1]} · ${name}`.trim() : `${brand} ${name}`.trim();
 }
+const BRAND_EN = {"삼성": "Samsung", "위니아": "Winia"};
 
 async function init(){
   try{ const h = await (await fetch("health")).json();
