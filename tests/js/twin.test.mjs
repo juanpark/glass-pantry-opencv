@@ -251,3 +251,12 @@ test("a crossed, collapsed or out-of-order outline is unusable; a fair one is no
   assert.equal(T.outlineProblem([[100, 100], [900, NaN], [900, 900], [100, 900]]), "not_finite");
   assert.equal(T.squareToQuad([[100, 100], [900, 100], [100, 900], [900, 900]]), null);  // no drawing through it either
 });
+
+// ---- red team 10/23: an outline with a corner on the diagonal, or a sliver, is not drawable either ----
+test("a corner pushed onto the diagonal (an angle near 180°) or a tiny outline is refused", () => {
+  assert.equal(T.outlineProblem([[94, 125], [600, 800], [1082, 1443], [94, 1443]]), "not_convex");
+  assert.equal(T.outlineProblem([[100, 100], [1000, 100], [1000, 110], [100, 110]], [1176, 1568]), "too_small");
+  assert.equal(T.outlineProblem([[500, 700], [680, 700], [680, 900], [500, 900]], [1176, 1568]), "too_small");
+  assert.equal(T.outlineProblem(Q, [1176, 1568]), null);
+  assert.equal(T.outlineProblem([[94, 125], [1082, 125], [1082, 1443], [94, 1443]], [1176, 1568]), null);
+});

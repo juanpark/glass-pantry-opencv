@@ -193,13 +193,13 @@ def straighten(event, is_enabled, context=None) -> dict:
         _log(route="straighten", result="paused")
         return _resp(503, {"error": "paused", "message": "The live page is switched off. Try the recorded sample."})
     if len(event.get("body") or "") > MAX_BYTES * 4 // 3 + 1024:
-        return _resp(413, {"error": "too_large"})
+        return _resp(413, {"error": "too_large", "message": "Photo too large; the page shrinks photos before sending."})
     try:
         raw = event.get("body") or ""
         req = json.loads(base64.b64decode(raw) if event.get("isBase64Encoded") else raw)
         jpeg = base64.b64decode(req["photo"])
     except Exception:
-        return _resp(400, {"error": "bad_photo"})
+        return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
     from verifier import frames, opening
     import hashlib
     f = frames.canonical(jpeg) if len(jpeg) <= MAX_BYTES else None

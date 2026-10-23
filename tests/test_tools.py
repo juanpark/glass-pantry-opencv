@@ -136,3 +136,44 @@ def test_the_fridge_picker_leads_with_brand_and_model_number():
     assert labels["model:lg-dios-4door"].startswith("LG M874GBB252 · ")
     assert labels["template:standard"] == "Generic: fridge on top, freezer below"
     assert all(not v.startswith("Generic: ") or " " in v[9:] for v in labels.values())  # every generic has a plain name
+
+
+def _page():
+    from pathlib import Path
+    return (Path(__file__).resolve().parent.parent / "web" / "fridge.html").read_text(encoding="utf-8")
+
+
+def _body(page, start, end="\n};"):
+    i = page.index(start)
+    return page[i:page.index(end, i)]
+
+
+def test_red_team_page_fixes_are_wired():
+    """Red team 10/23 (private notes, redteam_ocv_v4_live.md): each finding's guard is where the person acts."""
+    p = _page()
+    # 1: the unverified path and Confirm measure the outline against the photo's size
+    assert "T.outlineProblem(trace.corners, trace.size)" in _body(p, '$("#noCorners").onclick')
+    assert "T.outlineProblem(trace.corners, trace.size)" in _body(p, '$("#layoutOk").onclick')
+    # 2: nothing in a card may widen the page; tables scroll inside their wrapper
+    assert ".card>*{min-width:0}" in p.replace(" ", "") and ".row>*{min-width:0}" in p.replace(" ", "")
+    # 3: a refused save is said in the card the person is using
+    assert "commit(res.next, traceNote)" in p and "commit(r.next, fillNote)" in p
+    # 4: a photo too small to trace is refused before step 1
+    assert "MIN_TRACE" in _body(p, '$("#tracePick").addEventListener', "\n});")
+    # 6: changing the dropdown while the switch question is open withdraws the question
+    assert "modelNote" in _body(p, '$("#model").addEventListener', ";\n")
+    # 7: touch gets a finger-sized reach in CSS pixels
+    assert "pointerType" in p and "FINGER" in p
+
+
+def test_straighten_refusals_carry_a_message():
+    import base64
+    import json
+    from service import handler as h
+    big = {"rawPath": "/straighten", "requestContext": {"http": {"method": "POST"}}, "headers": {},
+           "body": "x" * (h.MAX_BYTES * 2), "isBase64Encoded": False}
+    r = h.handler(big, is_enabled=lambda: True)
+    assert r["statusCode"] == 413 and json.loads(r["body"]).get("message")
+    bad = {**big, "body": json.dumps({"photo": base64.b64encode(b"not an image").decode()})}
+    r = h.handler(bad, is_enabled=lambda: True)
+    assert r["statusCode"] == 400 and json.loads(r["body"]).get("message")
