@@ -22,12 +22,26 @@ The page follows the Glass Pantry app's pipeline (docs/pipeline.md): **pick the 
 app's catalogue) → **trace each compartment over a photo** → **fill each shelf, drawer or door bin from its own
 photo**. A person confirms every layout and every list; the fridge is kept in the browser tab only.
 
-**Tracing a compartment (no model call).** The person places the opening's four corners; OpenCV checks the
-quadrilateral (area, angles, foreshortening) and straightens the opening plane with `warpPerspective`; the person
-draws the shelf lines on the straightened view. We also built OpenCV suggestions for the corners (largest valid
-convex quadrilateral) and for snap edges (Canny + Hough row profile); both failed their pre-set bar on the test
-photos and are switched off (§6). A removed shelf's things move to "Unplaced"; nothing
-is ever deleted. A photo whose opening cannot be framed is traced unstraightened and labelled unverified.
+**Picking the fridge (one model call).** The person photographs the model sticker or the fridge. OpenCV's photo
+gate runs first: a blurry or smeared photo is sent back with the reason and costs nothing (its brightness and
+glare limits were set on shelf photos and would refuse a clean white sticker, so they are not applied here). Claude
+reads the model number as printed and the fridge's kind (fridge over freezer, side-by-side …); it never picks a
+catalogue row. Plain code matches the reading: the exact model number; else a sibling number of the same maker
+(a shared 7-character prefix); else the generic layout of that kind and library fridges of that kind. A maker that
+contradicts the catalogue row is never an exact match, and an answer that is not exactly one JSON object, or was cut
+off, suggests nothing. The person chooses, then confirms with the same button as picking from the list.
+
+**Tracing a compartment (no model call).** Two steps on the same photo. *Step 1, outline the opening:* a
+see-through shape with named corners (top-left …) and edges (top edge, left wall …); the person drags a corner or a
+whole edge onto the opening. OpenCV checks the quadrilateral (convex, ordered, area ≥ 15%, corner angles 55-125°,
+opposite sides within 2.5×) and straightens the opening plane with `getPerspectiveTransform` + `warpPerspective`.
+*Step 2, match the shelves and drawers:* the catalogue's levels appear inside the outline in perspective (the same
+homography, computed in the browser), named as they will be saved; the person drags, adds or removes lines and
+confirms. We also built OpenCV suggestions for the corners (largest valid convex quadrilateral) and for snap edges
+(Canny + Hough row profile); both failed their pre-set bar on the test photos and are switched off (§6), so OpenCV
+draws nothing of its own. A removed shelf's things move to "Unplaced"; nothing is ever deleted. A photo whose
+opening cannot be framed is traced unstraightened and labelled unverified (an outline the lines cannot be drawn
+through, such as crossed corners, is refused even then).
 
 **Filling a level.** One shelf photo goes through an agent loop. **OpenCV's evidence decides each next action:**
 
@@ -66,17 +80,23 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
 
 [Diagram: docs/architecture/architecture.png]
 
+![Agent loop for one shelf photo: OpenCV's evidence decides retake, ask or file](architecture/agent_loop.png)
+
+A recorded run (the page's sample, `web/samples/sample.json`) shows the loop changing its action: the gate passed
+(Laplacian variance 468), Claude listed 28 items, OpenCV picked 4 close-ups, one label re-read disagreed with the
+first reading (`label_conflict:i11`), so the action became **ask**, not file.
+
 ## 4. OpenCV 5 in the loop
 
 | Function | OpenCV | What it changes |
 |---|---|---|
-| Photo gate | `Laplacian`, `Sobel`, structure tensor, histogram | retake, with no model call |
+| Photo gate | `Laplacian`, `Sobel`, structure tensor, histogram | retake, with no model call (shelf scans and fridge identification) |
 | Shelf check | `Canny`, `HoughLinesP` (OpenCV 5 N×4 output) | ask about a shelf the photo does not show |
 | Close-up selection | box geometry, `Laplacian` variance at a fixed scale | which items get a second look; which are left unresolved |
 | Crops | `resize` (`INTER_AREA`), `imencode` | the evidence the second look sees |
-| Opening suggestion | `Canny`, `findContours`, `convexHull`, `approxPolyDP`, quad validation | four dashed corners a person confirms or moves |
-| Straightening | `getPerspectiveTransform`, `warpPerspective` | a front view of the opening plane to trace on |
-| Snap edges | `Canny`, `HoughLinesP` row profile on the straightened view | where a dropped shelf line lands |
+| Outline check + straightening | quad validation, `getPerspectiveTransform`, `warpPerspective` | refuses an outline it cannot straighten, with the reason in words; a front view of the opening plane |
+| Opening suggestion (built, **off**) | `Canny`, `findContours`, `convexHull`, `approxPolyDP` | failed its pre-set bar (§6); people place corners by hand |
+| Snap edges (built, **off**) | `Canny`, `HoughLinesP` row profile on the straightened view | failed its pre-set bar (§6) |
 | Change detection (experiment) | `SIFT`, `BFMatcher` kNN + ratio test, `findHomography` with `USAC_MAGSAC`, `warpPerspective`, gradient ZNCC | per old item: unchanged / possible change / cannot compare |
 
 ## 5. AWS deployment
@@ -88,7 +108,8 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
   - upload size and pixel limits;
   - a wall-clock budget for every model call.
 - **Logs:** CloudWatch logs hold codes and counts only: no photos, crops, labels or model text.
-- **Most model calls per scan:** 1 reading + 4 close-ups + 4 judge calls.
+- **Most model calls per scan:** 1 reading + 4 close-ups + 4 judge calls. Identifying the fridge: 1 call, counted
+  against the same daily cap, after the photo gate.
 - **Cost [dev]:** about $0.09 per scan including close-ups; 31 s for a scan inside the Lambda image.
 
 ## 6. Evaluation
@@ -125,6 +146,12 @@ time); the current label-only configuration has not been measured on held-out ph
   failed the bar set before testing (offered on ≥60% with median error ≤3%; recall ≥60% with ≤2 false per photo) and
   are off.
 
+**Identifying the fridge** (first run, prompt not changed afterwards; 5 photos from one kitchen; 5 calls, $0.063):
+the three photos of the rating sticker were read as RB38J7200S4 and matched exactly; a photo of the open fridge
+with no sticker was read as "fridge on top, freezer below" with no model number invented, and got the generic
+layout of that kind first; a shelf close-up got no suggestion. Not tested on real photos: a sibling model number,
+another maker, a closed fridge front.
+
 **Reading these together:** on the development photos the zoom pass turned 4 wrong product names into questions;
 on the new photos there was no wrong first label among the 28 scored readings, and the zoom pass only added
 questions. One kitchen, 12 scans: the zoom pass is a safety net whose value depends on how hard the photo is. In the
@@ -149,6 +176,8 @@ cost is expected to be lower but is unmeasured.
   equal to the real one).
 - **Change detection** is an experiment: tested on generated images, not on real handheld pairs. It says nothing
   about things added outside the old items' boxes.
+- **Identifying the fridge** knows 11 models and 5 generic layouts. The "same family" rule is a prefix heuristic,
+  and a sticker alone does not say the fridge's kind unless the model is in the catalogue.
 - **[dev]** numbers come from one kitchen.
 
 ## 8. Responsible use
@@ -165,4 +194,5 @@ cost is expected to be lower but is unmeasured.
 | Web page + engine on AWS | Live (switch on during judging, capped) |
 | Recorded example on the page | Replay of one real run, labelled RECORDED |
 | Glass Pantry app footage in the video | The released app. The zoom pass is **not** in the released app; a prototype build, if shown, is labelled as such |
+| Fridge from a sticker photo, two-step outline editor | Live on the web page; not yet in the phone app |
 | Change detection | Experiment, not in the service |

@@ -11,6 +11,7 @@ private/
 *.heic
 *.png
 !web/samples/*.png
+!docs/architecture/*.png
 .env*
 CLAUDE.md
 # Planning, agent notes and reviews live in the private notes repo, not here
