@@ -260,3 +260,20 @@ test("a corner pushed onto the diagonal (an angle near 180°) or a tiny outline 
   assert.equal(T.outlineProblem(Q, [1176, 1568]), null);
   assert.equal(T.outlineProblem([[94, 125], [1082, 125], [1082, 1443], [94, 1443]], [1176, 1568]), null);
 });
+
+// ---- red-team fixes R1: a saved twin is believed only if every part the page reads has its shape ----
+test("only a well-formed twin is accepted from storage", () => {
+  const a = T.newTwin(A, "h", rnd);
+  a.items["cold/L0"] = [thing("a")];
+  assert.equal(T.isTwin(a), true);
+  const bad = f => { const t = JSON.parse(JSON.stringify(a)); f(t); return T.isTwin(t); };
+  assert.equal(bad(t => { t.levels["cold/L0"] = null; }), false);
+  assert.equal(bad(t => { t.levels["cold/L0"].top = "x"; }), false);
+  assert.equal(bad(t => { delete t.levels["cold/L0"].comp; }), false);
+  assert.equal(bad(t => { t.items["cold/L0"] = {}; }), false);
+  assert.equal(bad(t => { t.items["cold/L0"] = [null]; }), false);
+  assert.equal(bad(t => { t.unplaced = [3]; }), false);
+  assert.equal(bad(t => { delete t.rev; }), false);
+  assert.equal(bad(t => { t.v = 2; }), false);
+  assert.equal(T.isTwin(null), false);
+});

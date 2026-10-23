@@ -35,6 +35,21 @@ export function replaceModel(prevs, row, sha, rnd = Math.random) {
   return next;
 }
 
+/** Is this (read from storage) a twin every function here can use? Checks each part the page reads, not only the
+ * wrappers: a level is an object with a comp (and numeric top/floor) or a panel, items are arrays of objects. */
+export function isTwin(t) {
+  const obj = o => !!o && typeof o === "object" && !Array.isArray(o);
+  const things = a => Array.isArray(a) && a.every(obj);
+  if (!obj(t) || t.v !== 1 || typeof t.id !== "string" || typeof t.key !== "string") return false;
+  if (![t.levels, t.items, t.traced, t.rev].every(obj) || !things(t.unplaced)) return false;
+  for (const l of Object.values(t.levels)) {
+    if (!obj(l) || typeof l.kind !== "string") return false;
+    if (typeof l.comp === "string") { if (!Number.isFinite(l.top) || !Number.isFinite(l.floor)) return false; }
+    else if (typeof l.panel !== "string") return false;
+  }
+  return Object.values(t.items).every(things);
+}
+
 export function holderOf(twin, id) {
   const l = twin.levels[id];
   return l ? (l.comp || l.panel) : null;
