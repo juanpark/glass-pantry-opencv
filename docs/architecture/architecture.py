@@ -23,12 +23,21 @@ def step(label):
                  height="0.7", fixedsize="false", labelloc="c")
 
 
-with Diagram("Glass Pantry Shelf Check", filename="docs/architecture/architecture", outformat="png", show=False,
+with Diagram("Glass Pantry: photo to fridge twin", filename="docs/architecture/architecture", outformat="png", show=False,
              direction="LR", graph_attr=G, node_attr=N, edge_attr=E):
-    person = Mobile("Person\n(web page or app)")
+    person = Mobile("Person\n(phone or computer browser)")
+
+    with Cluster("Browser: your fridge (this tab only)", graph_attr={"bgcolor": "#f6f3fb", "fontname": "Helvetica"}):
+        pick = step("A Pick the fridge\n(app catalogue layouts)")
+        twin = step("D Fridge twin\nlevels, items, Unplaced")
+        pick >> twin
 
     with Cluster("AWS us-east-1", graph_attr={"bgcolor": "#f3f6fb", "fontname": "Helvetica"}):
-        with Cluster("Lambda container: OpenCV 5 + agent loop", graph_attr={"bgcolor": "#ffffff"}):
+        with Cluster("Set up: POST /straighten (no model call)", graph_attr={"bgcolor": "#ffffff"}):
+            sug = step("B Suggest corners\n(OpenCV: contours, quad checks)")
+            warp = step("C Straighten + snap edges\n(OpenCV: warpPerspective,\nHough row profile)")
+            sug >> Edge(label="person drags,\nconfirms") >> warp
+        with Cluster("Fill: POST /scan, OpenCV 5 + agent loop", graph_attr={"bgcolor": "#ffffff"}):
             gate = step("1 Photo gate\n(OpenCV: blur, shake, light)")
             read = step("2 Model reads shelf\n(items, boxes, shelf edges)")
             planes = step("3 Shelf check\n(OpenCV: Canny + Hough)")
@@ -49,8 +58,11 @@ with Diagram("Glass Pantry Shelf Check", filename="docs/architecture/architectur
         gh = Github("GitHub Actions\nmain branch")
         role = IAMRole("Deploy role\n(OIDC, 1 h)")
 
-    person >> Edge(label="photo") >> gate
-    decide >> Edge(xlabel="list, questions, overlays", constraint="false", color="#1f6f5c") >> person
+    person >> pick
+    person >> Edge(label="compartment photo") >> sug
+    warp >> Edge(label="person traces lines,\nconfirms", color="#1f6f5c") >> twin
+    person >> Edge(label="shelf photo") >> gate
+    decide >> Edge(label="person confirms list", color="#1f6f5c") >> twin
     params >> Edge(style="dotted") >> gate
     counter >> Edge(label="admit", style="dotted") >> gate
     read >> Edge(label="1 call") >> claude

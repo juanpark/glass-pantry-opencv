@@ -8,8 +8,10 @@ This entry reuses a few of its parts and builds the engine new.
 | Scan prompt (`verifier/prompts/contents.txt`) | Exported verbatim from the app (commit 6913119), frozen with a hash |
 | Photo gate thresholds (`verifier/gate.py`) | From our 2026-10-01 experiments on 12 shelf photos; code rewritten here |
 | Shelf-line check (`verifier/planes.py`) | Ported from our earlier evaluation script; the OpenCV 5 N×4 line shape kept |
+| Fridge layouts (`web/layouts/layouts.json`) | Exported from the app's catalogue by its own parser (commit 6913119, `tools/export_layouts_test.dart`), checked against the app's filing destinations, frozen with a hash |
 | Canonical frames, Claude adapter, zoom pass, label judge, decisions | New for this entry |
 | Lambda service, web page, deploy workflow, call cap, time budgets | New for this entry |
+| Straightening (`verifier/opening.py`) | New for this entry |
 | Change detection experiment | New for this entry |
 | Evaluation tools (annotation page, diagnostic) | New for this entry |
 
