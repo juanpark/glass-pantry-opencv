@@ -101,3 +101,20 @@ def test_the_fridge_page_does_not_advertise_switched_off_suggestions():
     page = (Path(__file__).resolve().parent.parent / "web" / "fridge.html").read_text(encoding="utf-8")
     if not h.SUGGEST_CORNERS:
         assert "suggests corners" not in page and "by hand" in page
+
+
+def test_the_page_refuses_an_unusable_outline_and_names_spaces_as_saved():
+    """Outline review R1: the unverified path and Confirm both refuse an outline the lines cannot be drawn through,
+    and step 2's names come from the same proposal Confirm saves (the pure rules are tested in tests/js)."""
+    import re
+    from pathlib import Path
+    page = (Path(__file__).resolve().parent.parent / "web" / "fridge.html").read_text(encoding="utf-8")
+
+    def body(start):
+        i = page.index(start)
+        return page[i:page.index("\n};", i)]
+    no_corners, confirm = body('$("#noCorners").onclick'), body('$("#layoutOk").onclick')
+    assert no_corners.index("T.outlineProblem(") < no_corners.index("startLines(")
+    assert confirm.index("T.outlineProblem(") < confirm.index("T.applyTrace(")
+    bands = page[page.index("function bandNames()"):page.index("function drawTrace()")]
+    assert "T.traceNames(" in bands and not re.search(r"levelsOf|levelName", bands)

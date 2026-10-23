@@ -160,3 +160,77 @@ export class Ops {
   live(op) { return !!op && this.cur[op.kind] === op.n; }
   cancel() { this.cur = {}; this.n++; }
 }
+
+// ---- outline geometry: the unit square (u, v in 0-1, the compartment's front) <-> the person's quad on the photo ----
+
+/** 3x3 homography taking the unit square's corners (0,0) (1,0) (1,1) (0,1) to the quad's TL, TR, BR, BL. */
+export function squareToQuad(q) {
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = q;
+  const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2;
+  const sx = x0 - x1 + x2 - x3, sy = y0 - y1 + y2 - y3;
+  const den = dx1 * dy2 - dx2 * dy1;
+  if (!Number.isFinite(den) || Math.abs(den) < 1e-12) return null;
+  const g = (sx * dy2 - dx2 * sy) / den, h = (dx1 * sy - sx * dy1) / den;
+  // w = g u + h v + 1 is linear, so positive at the square's four corners means no point of it maps to infinity
+  if (!(g + 1 > 1e-9 && h + 1 > 1e-9 && g + h + 1 > 1e-9)) return null;
+  return [[x1 - x0 + g * x1, x3 - x0 + h * x3, x0], [y1 - y0 + g * y1, y3 - y0 + h * y3, y0], [g, h, 1]];
+}
+
+/** Why an outline cannot be drawn into, or null. Only shape, not the server's size or angle limits (the unverified path
+ * skips those): four finite, distinct corners in TL, TR, BR, BL order around a convex shape. */
+export function outlineProblem(q) {
+  if (!Array.isArray(q) || q.length !== 4 || !q.every(p => p.length === 2 && p.every(Number.isFinite))) return "not_finite";
+  for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++)
+    if (Math.hypot(q[i][0] - q[j][0], q[i][1] - q[j][1]) < 1) return "repeated_corner";
+  const turns = q.map((a, i) => {
+    const b = q[(i + 1) % 4], c = q[(i + 2) % 4];
+    return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+  });
+  if (turns.every(t => t < 0)) return "not_ordered";  // a mirror image: the corners go round the wrong way
+  if (!turns.every(t => t > 0)) return "not_convex";
+  return squareToQuad(q) ? null : "not_convex";
+}
+
+export function applyH(m, [x, y]) {
+  const w = m[2][0] * x + m[2][1] * y + m[2][2];
+  return [(m[0][0] * x + m[0][1] * y + m[0][2]) / w, (m[1][0] * x + m[1][1] * y + m[1][2]) / w];
+}
+
+export function invertH(m) {
+  const [[a, b, c], [d, e, f], [g, h, i]] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null;
+  return [[A / det, -(b * i - c * h) / det, (b * f - c * e) / det],
+          [B / det, (a * i - c * g) / det, -(a * f - c * d) / det],
+          [C / det, -(a * h - b * g) / det, (a * e - b * d) / det]];
+}
+
+/** Where a level line at height v of the compartment sits on the photo: its two ends. */
+export function lineOnPhoto(m, v) { return [applyH(m, [0, v]), applyH(m, [1, v])]; }
+
+/** The compartment height (0-1) a point on the photo corresponds to, or null outside the outline. */
+export function vAt(m, p) {
+  const inv = invertH(m);
+  if (!inv) return null;
+  const [u, v] = applyH(inv, p);
+  return u >= -0.05 && u <= 1.05 && v >= 0 && v <= 1 ? v : null;
+}
+
+/** The names Confirm would give the spaces between these lines ("Shelf 1" ... "Drawer 2", numbered within a kind, top
+ * to bottom), taken from the same applyTrace result that Confirm saves; null when that layout would be refused. */
+export function traceNames(twin, comp, vs) {
+  const res = applyTrace(twin, comp, vs);
+  if (res.error) return null;
+  const seen = {};
+  return liveLevels(res.next, comp).map(([, l]) => {
+    const k = l.kind === "drawer" ? "Drawer" : "Shelf";
+    seen[k] = (seen[k] || 0) + 1;
+    return `${k} ${seen[k]}`;
+  });
+}
+
+/** Interior lines (heights 0-1) between a compartment's live levels, top to bottom. */
+export function levelLines(twin, comp) {
+  return liveLevels(twin, comp).slice(0, -1).map(([id, l]) => ({v: l.floor, id}));
+}

@@ -195,3 +195,59 @@ test("lines too close or outside are refused", () => {
   assert.equal(T.applyTrace(a, "cold", [0.5, 0.51]).error, "lines_too_close");
   assert.equal(T.applyTrace(a, "cold", [1.2]).error, "line_outside");
 });
+
+// ---- outline geometry ----
+const Q = [[100, 120], [900, 80], [950, 1400], [60, 1350]];
+
+test("the unit square's corners land on the person's corners", () => {
+  const m = T.squareToQuad(Q);
+  [[0, 0], [1, 0], [1, 1], [0, 1]].forEach((p, i) => {
+    const [x, y] = T.applyH(m, p);
+    assert.ok(Math.abs(x - Q[i][0]) < 1e-6 && Math.abs(y - Q[i][1]) < 1e-6, `${p} -> ${x},${y}`);
+  });
+});
+
+test("a point on the photo maps back to the height it was drawn at", () => {
+  const m = T.squareToQuad(Q);
+  for (const v of [0.1, 0.37, 0.8]) {
+    const [a, b] = T.lineOnPhoto(m, v);
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    assert.ok(Math.abs(T.vAt(m, mid) - v) < 0.02, `${v}`);   // the chord's midpoint is near the line in perspective
+    assert.ok(Math.abs(T.vAt(m, a) - v) < 1e-9);
+  }
+});
+
+test("points outside the outline have no height, and a degenerate outline has no geometry", () => {
+  const m = T.squareToQuad(Q);
+  assert.equal(T.vAt(m, [5000, 700]), null);
+  assert.equal(T.squareToQuad([[0, 0], [0, 0], [0, 0], [0, 0]]), null);
+});
+
+test("the starting lines are the boundaries between the template's levels", () => {
+  const a = T.newTwin(A, "h", rnd);
+  assert.deepEqual(T.levelLines(a, "cold").map(l => l.id), ["cold/L0", "cold/L1", "cold/L2", "cold/L3"]);
+  assert.ok(T.levelLines(a, "cold").every(l => l.v > 0 && l.v < 1));
+});
+
+// ---- outline review R1: what step 2 shows is what Confirm saves; an unusable outline never reaches step 2 ----
+test("the names shown for the spaces are the kinds Confirm will save, even when the count is unchanged", () => {
+  const a = T.newTwin(A, "h", rnd);
+  const same = T.levelLines(a, "cold").map(l => l.v);
+  assert.deepEqual(T.traceNames(a, "cold", same), ["Shelf 1", "Shelf 2", "Shelf 3", "Drawer 1", "Drawer 2"]);
+  const moved = [0.05, 0.10, 0.15, 0.20];  // five spaces again, but the drawers' bands no longer overlap them
+  const names = T.traceNames(a, "cold", moved), res = T.applyTrace(a, "cold", moved);
+  assert.deepEqual(names, T.liveLevels(res.next, "cold").map(([, l]) => l.kind === "drawer" ? "Drawer" : "Shelf")
+    .map((k, i, all) => `${k} ${all.slice(0, i + 1).filter(x => x === k).length}`));
+  assert.equal(T.traceNames(a, "cold", [0.5, 0.51]), null);  // a refused layout has no names to promise
+});
+
+test("a crossed, collapsed or out-of-order outline is unusable; a fair one is not", () => {
+  assert.equal(T.outlineProblem(Q), null);
+  assert.equal(T.outlineProblem([[100, 100], [900, 100], [100, 900], [900, 900]]), "not_convex");
+  assert.equal(T.outlineProblem([[0, 0], [0, 0], [0, 0], [0, 0]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[100, 100], [100, 100], [900, 900], [100, 900]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[100, 100], [500, 100], [900, 100], [500, 100.5]]), "repeated_corner");
+  assert.equal(T.outlineProblem([[900, 100], [100, 100], [100, 900], [900, 900]]), "not_ordered");  // mirrored
+  assert.equal(T.outlineProblem([[100, 100], [900, NaN], [900, 900], [100, 900]]), "not_finite");
+  assert.equal(T.squareToQuad([[100, 100], [900, 100], [100, 900], [900, 900]]), null);  // no drawing through it either
+});

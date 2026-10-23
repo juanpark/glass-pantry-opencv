@@ -43,7 +43,7 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
 5. **Zoom pass (OpenCV picks, the model re-reads).**
    - **Selection** (from box geometry and image content):
      - labelled items whose box is under 3% of the photo;
-     - counts of two or more.
+     - (built and tested, now **off**: counts of two or more; see §6).
    - **Skipped, with no call:**
      - groups cut by the photo edge;
      - boxes with no fine detail left (Laplacian variance at a fixed 400 px scale below 60): blur means the
@@ -52,7 +52,8 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
    - **The close-up:** cut from the original at full detail, reduced only to the model's size limit. The model is
      told *where* the item is in the crop, never what the first reading said.
 6. **Reconcile.**
-   - Only the label and the count may be re-observed; box, shelf and identity are never changed.
+   - Only the label (and, when count re-reads are on, the count) may be re-observed; box, shelf and identity are
+     never changed.
    - Two label strings that differ go to a text-only judge (Claude Haiku 5.5): is this the same product in
      another language or form? The judge can only clear a difference; it never supplies a label.
    - A real disagreement becomes a question; neither reading wins.
@@ -108,12 +109,16 @@ is ever deleted. A photo whose opening cannot be framed is traced unstraightened
 - 23 close-up label readings agreed.
 
 **[test] results** (6 new shelf photos from 3 spaces, before/after one change each, 2 runs per photo = 12 scans;
-truth by the owner's annotation before scoring):
-- **Labels:** 28 labelled readings, all annotated. **0 were wrong first readings**, so the zoom pass had nothing to
-  catch on this set. It raised **2 false label alarms** (2 of 28).
-- **Counts:** 5 count re-reads, **5 false alarms**: the close-up counted packages (one egg tray) where the first
-  reading counted units (30 eggs). Count re-reads are now switched off; label re-reads stay.
-- **Cost and time per scan:** $0.065 → $0.080 with zoom (+23%); median 19.5 s → 23.9 s.
+truth by the owner's annotation before scoring). **Measured with count re-reads ON** (the configuration at the
+time); the current label-only configuration has not been measured on held-out photos.
+- **Labels:** among the 28 scored eligible label readings the model proposed, **no first reading was wrong**, so
+  the zoom pass had nothing to catch on this set. It raised **2 false label alarms** (2 of 28). Not measured:
+  items the model never listed, and the accuracy of the final list.
+- **Counts:** 5 count re-reads, **5 false alarms**: four were an egg tray (first reading 30 eggs, close-up "1"
+  tray) and one was 1000 → 1; the owner chose the first reading every time. Count re-reads are now off; label
+  re-reads stay.
+- **Cost and time per scan, count-enabled configuration:** $0.065 → $0.080 with zoom (+23%); median
+  19.5 s → 23.9 s.
 - **Step 3 suggestions** (5 compartment photos: 3 with the whole opening visible, 2 deliberately not): corner
   suggestion within 3% of the true corners on 0 of 3 (worst corner 12-19% of the diagonal off) and offered on both
   photos where it should not have been; snap targets found 14 of 15 true edges but added 3, 13 and 15 false ones. Both
@@ -121,9 +126,10 @@ truth by the owner's annotation before scoring):
   are off.
 
 **Reading these together:** on the development photos the zoom pass turned 4 wrong product names into questions;
-on the new photos the model read every label right and the zoom pass only added questions. One kitchen, 12 scans:
-the honest conclusion is that the zoom pass is a safety net whose value depends on how hard the photo is, at a
-known cost (+$0.015, +4 s, ~7% false label questions).
+on the new photos there was no wrong first label among the 28 scored readings, and the zoom pass only added
+questions. One kitchen, 12 scans: the zoom pass is a safety net whose value depends on how hard the photo is. In the
+count-enabled configuration it cost +$0.015 and +4 s per scan with 2 of 28 false label questions; the label-only
+cost is expected to be lower but is unmeasured.
 
 **Failures we saw and what we did:**
 
@@ -136,7 +142,8 @@ known cost (+$0.015, +4 s, ~7% false label questions).
 
 ## 7. Limitations
 - Only items the model listed are checked. An item it never mentions is not found by the zoom pass.
-- Only small labels and counts are re-read. A wrong name on a large box is not flagged.
+- Only small labels are re-read (count re-reads are built but off). A wrong name on a large box is not flagged, and
+  a wrong count is never questioned.
 - A shelf edge proposed at the frame border cannot be confirmed by OpenCV, so the page asks about it (noise).
 - The label judge is a model too. It can call two different products "the same" (we saw a misread brand judged
   equal to the real one).
