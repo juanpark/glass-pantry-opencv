@@ -35,7 +35,7 @@ with Diagram("Glass Pantry: photo to fridge twin", filename="docs/architecture/a
 
     with Cluster("AWS us-east-1", graph_attr={"bgcolor": "#f3f6fb", "fontname": "Helvetica"}):
         with Cluster("Identify: POST /identify (1 model call)", graph_attr={"bgcolor": "#ffffff"}):
-            igate = step("Photo gate\n(OpenCV: blur, shake, light)")
+            igate = step("Photo gate\n(OpenCV: blur, shake)")
             iread = step("Model reads the sticker\n(code, maker, kind)")
             imatch = step("Code matches the catalogue\nexact / family / kind")
             igate >> Edge(label="sharp") >> iread >> imatch

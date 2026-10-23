@@ -1,7 +1,8 @@
 # The pipeline: from a photo to a fridge you can open
 
-The web page follows the same four steps as the Glass Pantry phone app, so that a phone photo and a browser give
-the same result. OpenCV suggests, checks and straightens; a person confirms every layout and every list. Status
+This web prototype follows the four steps of the Glass Pantry phone app's workflow, reusing its scan prompt and an
+export of its appliance catalogue; it is separate from the app, and identical results are not claimed. OpenCV
+checks and straightens; a person confirms every layout and every list. Status
 markers: **built** (code and tests on this branch), **planned** (decided, not yet built).
 
 ## The four steps
@@ -28,22 +29,23 @@ Rules the page keeps (`web/fridge.html`):
 - **Answers stay bound to their photo and layout.** Corners carry the photo's hash; a scan answer is refused if its
   shelf was re-traced or removed meanwhile.
 - **The fridge stays in the browser.** Session storage only; a save is written, read back and compared before the
-  page says "saved". The server keeps no photos.
+  page says "saved". The live handler keeps uploaded photos in memory for the request only; the one recorded
+  example it serves was published with the owner's approval.
 
-## How items are drawn (planned)
+## How items are drawn
 
-One rule for the phone app and the web page:
-1. **The item matches a library row** (the app's item catalogue: names and sizes per product family) → the library
-   model.
-2. **No match** → the nearest basic shape built on the fly: box, can, bottle, carton, tray, tub, pouch, bag, rounded
-   produce, at the size the photo shows (snapped to a catalogue size when the product is recognised).
-3. **The label** comes from the photo: OpenCV flattens a flat face with a homography, the same operation as step 3;
-   curved labels are later.
+**Built (this web page):** a schematic 3D view. Each placed thing is a box or cylinder from a basic family (bottle,
+can, jar, carton, tub, tray, pouch, bag, box) chosen by the scan's vessel word; the shelf photo's item box guides
+horizontal position, width and height, clamped inside its own level; depth is approximate. Door bins, retired levels
+and Unplaced are not drawn in 3D (`web/scene.js`).
 
-Per-product models are upgrades for common items, not a requirement, so any product in any market can be drawn.
+**Planned (phone app and later this page):** a library model when the item matches a row of the app's item catalogue;
+otherwise the nearest basic shape at the size the photo shows; the label taken from the photo by flattening a flat
+face with a homography. Per-product models are upgrades for common items, not a requirement.
 
 ## Beyond the fridge
 
-The data is a tree of containers (a space holds containers, containers hold levels, levels hold items), so a
-pantry, a cupboard or a tabletop uses the same steps. A container carries context such as its climate (room, fridge,
+The phone app's data is a tree of containers (a space holds containers, containers hold levels, levels hold
+items), so a pantry, a cupboard or a tabletop could use the same steps; this web prototype supports catalogue
+appliances only. A container carries context such as its climate (room, fridge,
 freezer). Rooms need a scale source (an object of known size, or phone depth), which this entry does not attempt.

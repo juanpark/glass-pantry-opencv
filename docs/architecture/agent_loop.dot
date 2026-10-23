@@ -9,22 +9,22 @@ digraph loop {
   gate    [label="PERCEIVE · OpenCV gate\nblur · shake · dark · glare"];
   read    [label="PROPOSE · Claude reads\nitems, boxes, labels, shelf edges", fillcolor="#fbf1dc", color="#8a5a00"];
   shelf   [label="CHECK · OpenCV shelf check\nCanny + HoughLinesP row profile"];
-  pick    [label="CHOOSE · OpenCV picks close-ups\nsmall labels · sharp enough · not cut off · ≤ 4"];
-  zoom    [label="RE-READ · Claude on a full-res crop\n+ label judge (same product?)", fillcolor="#fbf1dc", color="#8a5a00"];
-  decide  [label="DECIDE\nreasons accumulate; nothing empty or cut off is filed", shape=diamond, style="filled", fillcolor="#ffffff", fontsize=11];
-  retake  [label="ACTION: retake\n(no model call spent)", fillcolor="#fde8e4", color="#b0413e"];
-  ask     [label="ACTION: ask the person\n(which reading? is this shelf real?)", fillcolor="#fff4d6", color="#8a5a00"];
-  file    [label="ACTION: propose to file\nperson confirms → twin", fillcolor="#e3f0eb"];
-  skip    [label="left unresolved\n(blur means the detail is gone)", fillcolor="#eeeeee", color="#888888", fontsize=10];
+  pick    [label="CHOOSE · OpenCV picks close-ups\nsmall labelled boxes · sharp enough · ≤ 4"];
+  zoom    [label="RE-READ · Claude on a crop of the received image\n+ label judge (same product?)", fillcolor="#fbf1dc", color="#8a5a00"];
+  decide  [label="DECIDE\nreasons accumulate; incomplete first reading → ask", shape=diamond, style="filled", fillcolor="#ffffff", fontsize=11];
+  retake  [label="RECOMMEND: retake\n(no model call spent)", fillcolor="#fde8e4", color="#b0413e"];
+  ask     [label="RECOMMEND: ask\n(both readings shown; is this shelf line real?)", fillcolor="#fff4d6", color="#8a5a00"];
+  file    [label="RECOMMEND: file\nperson confirms → twin", fillcolor="#e3f0eb"];
+  skip    [label="left unresolved\n(below the sharpness threshold)", fillcolor="#eeeeee", color="#888888", fontsize=10];
 
   photo -> gate;
   gate -> retake [label=" fails", color="#b0413e", fontcolor="#b0413e"];
   gate -> read [label=" passes"];
   read -> shelf -> pick -> zoom -> decide;
-  shelf -> decide [label=" a line with\n no real edge", style=dashed];
+  shelf -> decide [label=" a line without\n edge support", style=dashed];
   pick -> skip [label=" too blurry", style=dashed];
   decide -> ask [label=" disagreement or\n unconfirmed shelf"];
-  decide -> file [label=" all agree"];
+  decide -> file [label=" no blocking issue\n detected"];
   ask -> file [label=" person answers", color="#1f6f5c"];
   { rank=same; retake; read; }
   { rank=same; ask; file; }

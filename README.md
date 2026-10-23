@@ -1,9 +1,10 @@
 # Glass Pantry Shelf Check (OpenCV AI Competition 2026)
 
-Photograph one fridge or pantry shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 checks the
-photo and the reading, picks the small labels worth a second look, and has them re-read from the
-full-resolution photo. What OpenCV finds decides the next action: **file** the list, **ask** the person, or ask for a
-**retake**. A person confirms before anything is kept.
+A web prototype of the Glass Pantry workflow: find your fridge from its model sticker, trace each compartment over a
+photo, then photograph each shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 gates the photo,
+checks the model's shelf lines against real edges, straightens traced openings, and selects small labels for a
+re-read from the uploaded image (the browser sends at most 3024 px). The engine recommends **file**, **ask** or
+**retake**; a person confirms before anything is kept. The fridge lives in the browser tab, drawn in 2D and 3D.
 
 ![Architecture](docs/architecture/architecture.png)
 
@@ -24,9 +25,10 @@ uv run python tools/serve_local.py --live                   # the web page on ht
 ## Deploy (AWS)
 
 `.github/workflows/deploy.yml` tests, builds the Lambda container (x86_64) with SAM, and deploys the stack
-`glass-pantry-opencv` in us-east-1 on every push to `main`. It signs in with GitHub OIDC (no stored keys) to a
-role limited to this stack's own resources, then smoke-tests the endpoint and checks that the role is refused
-elsewhere. The owner creates the execution role, the log group, the ECR repository, the upload bucket and the
+`glass-pantry-opencv` in us-east-1 on pushes to `main` that change code (documentation-only pushes do not deploy)
+or on manual dispatch. It signs in with GitHub OIDC (no stored keys) to a
+role meant for this stack's own resources, then smoke-tests the endpoint and runs four probes that the role is
+refused elsewhere. The owner creates the execution role, the log group, the ECR repository, the upload bucket and the
 call-counter table once (`template.yaml` names them).
 
 Guards on the live endpoint (all server-side): an owner on/off switch in Parameter Store, a shared daily scan cap
@@ -46,8 +48,12 @@ logs that hold codes and counts only.
 | `verifier/decide.py` | evidence → file / ask / retake |
 | `verifier/scan.py` | one photo through the loop, with a timed trace of every step |
 | `verifier/change.py` | experiment, not in the service: what changed between two photos of a shelf |
-| `service/handler.py` | the Lambda handler: page, health, recorded example, scan |
-| `web/index.html` | the page: upload, overlays, the list to confirm |
+| `verifier/identify.py` | matches the model's sticker reading to the catalogue (exact, family, kind) |
+| `verifier/opening.py` | outline checks and straightening (`warpPerspective`); suggestions built but off |
+| `service/handler.py` | the Lambda handler: pages, health, recorded example, scan, identify, straighten |
+| `web/fridge.html`, `web/twin.js` | the fridge page: pick, trace, fill; the browser twin and its rules |
+| `web/scene.js`, `web/twin3d.js` | the schematic 3D view (pure geometry; three.js drawing) |
+| `web/index.html` | the single-shelf check: upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |
 
 Docs: [architecture](docs/architecture/), [report (draft)](docs/report.md), [where the code came from](docs/provenance.md).
