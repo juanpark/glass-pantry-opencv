@@ -76,7 +76,7 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
 
   <section class="card">
     <h2>Before you start</h2>
-    <p>Photos go to this engine on AWS, and shelf photos also to Anthropic's Claude model, to be read. Nothing is stored on the server; your fridge is kept in this browser tab only. Leave people, documents and anything personal out of the frame.</p>
+    <p>Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Nothing is stored on the server; your fridge is kept in this browser tab only. Leave people, documents and anything personal out of the frame.</p>
     <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send photos.</span></label>
     <p class="muted"><a href="./">Or check a single shelf photo</a></p>
   </section>
@@ -87,6 +87,13 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <select id="model" aria-label="Fridge model"></select>
       <button id="useModel" type="button">Use this fridge</button>
     </div>
+    <div class="row">
+      <label class="btn" id="identifyPickLabel" aria-disabled="true">Find my fridge from a photo<input type="file" id="identifyPick" accept="image/*" disabled></label>
+      <span id="identifyBusy" class="row muted" hidden><span class="spinner"></span><span>Reading…</span></span>
+    </div>
+    <p class="muted" style="font-size:.82rem">Photograph the model sticker (usually inside, on a side wall) or the whole fridge. The AI reads it; you choose.</p>
+    <div id="identifyNote" class="note" hidden></div>
+    <ul class="items" id="identifyList" hidden></ul>
     <div id="modelNote" class="note" hidden></div>
     <p id="modelSource" class="muted" style="font-size:.82rem"></p>
   </section>
@@ -185,13 +192,15 @@ function commit(next){
 // ---------- layouts ----------
 function row(key){ return LAYOUTS.find(r => r.key === key); }
 function label(r){
-  if(r.key.startsWith("template:")) return `Generic: ${r.key.slice(9)}`;
+  if(r.key.startsWith("template:")) return `Generic: ${GENERIC_EN[r.key] || r.key.slice(9)}`;
   // brand and model number first: a phone's picker cuts long names off at the end ("Samsung RB38J7200S4 · 슬림스타일 …")
   const code = (r.model || "").match(/\(([^)]+)\)\s*$/), name = (r.model || r.key).replace(/\s*\([^)]+\)\s*$/, "");
   const brand = BRAND_EN[r.brand] || r.brand || "";
   return code ? `${brand} ${code[1]} · ${name}`.trim() : `${brand} ${name}`.trim();
 }
 const BRAND_EN = {"삼성": "Samsung", "위니아": "Winia"};
+const GENERIC_EN = {"template:standard": "fridge on top, freezer below", "template:freezerTop": "freezer on top, fridge below",
+  "template:sideBySide": "side-by-side doors", "template:kimchi": "standing kimchi fridge", "template:kimchiChest": "chest kimchi fridge"};
 
 async function init(){
   try{ const h = await (await fetch("health")).json();
@@ -221,7 +230,7 @@ async function init(){
 }
 function gate(){
   const on = $("#consent").checked;
-  for(const id of ["tracePick", "fillPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+  for(const id of ["tracePick", "fillPick", "identifyPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
 }
 
 $("#model").addEventListener("change", () => showSource());
@@ -229,10 +238,41 @@ function showSource(){
   const r = row($("#model").value); if(!r) return;
   $("#modelSource").textContent = (r.key.startsWith("template:") ? "Generic layout. " : "") + "Layout from Glass Pantry's catalogue (" + r.key + "@" + r.version + "); some sizes are estimates. Trace fits it to your fridge.";
 }
+// which fridge is this? the AI reads a sticker or front photo, the engine matches it; the person chooses, then taps
+// "Use this fridge" (nothing switches here)
+function identifyNote(text, kind = ""){ const n = $("#identifyNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
+$("#identifyPick").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  const my = ops.start("identify"), list = $("#identifyList");
+  identifyNote(""); list.hidden = true; list.textContent = ""; $("#identifyBusy").hidden = false;
+  try{
+    const blob = await shrink(f);
+    const r = await fetch("identify", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
+    const body = await r.json();
+    if(!ops.live(my)) return;
+    if(!r.ok){ identifyNote(body.message || "The engine said: " + body.error, "bad"); return; }
+    const rd = body.reading, picks = body.suggestions.filter(s => row(s.key));
+    if(!rd || !picks.length){
+      identifyNote("Couldn't tell which fridge this is. Pick it from the list, or try a photo of the model sticker.", "ask"); return;
+    }
+    identifyNote(`Read: ${[rd.brand, rd.model_code].filter(Boolean).join(" ") || "no model number"}. ${picks[0].match === "exact" ? "Found it." : "Closest matches below."} Choose one, then tap Use this fridge.`, "ok");
+    for(const s of picks.slice(0, 4)){
+      const li = document.createElement("li");
+      li.innerHTML = `<div class="row" style="gap:6px"><b></b><button class="small" type="button">Choose</button></div><span class="muted" style="font-size:.82rem"></span>`;
+      li.querySelector("b").textContent = label(row(s.key));
+      li.querySelector("span").textContent = s.reason;
+      li.querySelector("button").onclick = () => { $("#model").value = s.key; showSource(); $("#useModel").focus(); };
+      list.append(li);
+    }
+    list.hidden = false;
+  }catch(err){ if(ops.live(my)) identifyNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(ops.live(my)) $("#identifyBusy").hidden = true; }
+});
 function switchTo(r){  // a new fridge keeps everything the old one(s) held, in Unplaced; pending work is cancelled
   const next = T.replaceModel([twin, stale], r, LAYOUT_SHA);
   if(!commit(next)) return;
   stale = null; ops.cancel(); trace = null; fill = null;
+  $("#identifyBusy").hidden = true;  // a read still in flight is stale now; its answer is ignored
   $("#traceCard").hidden = true; $("#fillCard").hidden = true; $("#modelNote").hidden = true;
   render();
 }
