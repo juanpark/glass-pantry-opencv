@@ -227,3 +227,46 @@ def test_route_logs_no_coordinates(capsys):
     call(ev({"photo": jpeg(img), "corners": corners, "source": source}))
     out = capsys.readouterr().out
     assert "straighten" in out and str(int(q[0][0])) not in out.replace('"ms"', "")
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_time_running_out_inside_the_warp_publishes_nothing(monkeypatch):
+    img, q = opening_photo()
+    corners, source, _ = canonical_corners(img, q)
+    clock = Clock()
+    monkeypatch.setattr(h.time, "monotonic", clock)
+    real = op.warp
+
+    def slow_warp(*a, **k):
+        clock.t = 9.0
+        return real(*a, **k)
+    monkeypatch.setattr(op, "warp", slow_warp)
+    monkeypatch.setattr(op, "snap_targets", lambda *a, **k: pytest.fail("no targets after the budget"))
+    r = h.handler(ev({"photo": jpeg(img), "corners": corners, "source": source}), Ctx(10_000), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and json.loads(r["body"])["error"] == "out_of_time" and "image" not in r["body"]
+
+
+def test_time_running_out_inside_the_contour_search_publishes_nothing(monkeypatch):
+    img, _ = opening_photo()
+    clock = Clock()
+    monkeypatch.setattr(h.time, "monotonic", clock)
+    real = op.propose
+
+    def slow_propose(im, alive=None):
+        clock.t = 9.0
+        return real(im, alive)
+    monkeypatch.setattr(op, "propose", slow_propose)
+    r = h.handler(ev({"photo": jpeg(img)}), Ctx(10_000), is_enabled=lambda: True)
+    assert r["statusCode"] == 503 and json.loads(r["body"])["error"] == "out_of_time"
+
+
+def test_the_contour_search_stops_when_told():
+    img, _ = opening_photo()
+    assert op.propose(img, alive=lambda: False) is None

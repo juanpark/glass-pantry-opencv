@@ -120,9 +120,12 @@ def straighten(event, is_enabled, context=None) -> dict:
     def out_of_time() -> bool:
         return deadline is not None and deadline - time.monotonic() < STRAIGHTEN_MIN
 
-    if out_of_time():
+    def late() -> dict:
         _log(route="straighten", result="out_of_time")
         return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
+
+    if out_of_time():
+        return late()
     if not is_enabled():
         _log(route="straighten", result="paused")
         return _resp(503, {"error": "paused", "message": "The live page is switched off. Try the recorded sample."})
@@ -144,9 +147,10 @@ def straighten(event, is_enabled, context=None) -> dict:
     corners = req.get("corners") if isinstance(req, dict) else None
     if corners is None:
         if out_of_time():
-            _log(route="straighten", result="out_of_time")
-            return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
-        q = opening.propose(f.image)
+            return late()
+        q = opening.propose(f.image, alive=lambda: not out_of_time())
+        if out_of_time():  # a suggestion finished late is not published
+            return late()
         kind = "contour" if q is not None else "margin"
         q = q if q is not None else opening.fallback(w, h)
         _log(route="straighten", result="suggested", kind=kind, ms=round((time.time() - t0) * 1000))
@@ -161,10 +165,11 @@ def straighten(event, is_enabled, context=None) -> dict:
         return _resp(422, {"error": "cannot_straighten", "reason": reason,
                            "message": "Can't straighten with these corners. Move them, or trace on the photo instead."})
     if out_of_time():
-        _log(route="straighten", result="out_of_time")
-        return _resp(503, {"error": "out_of_time", "message": "The engine ran out of time. Please try again."})
+        return late()
     import cv2
     wp = opening.warp(f.image, corners)
+    if out_of_time():  # no snap targets and no result after the budget
+        return late()
     ok, buf = cv2.imencode(".jpg", wp.image, [cv2.IMWRITE_JPEG_QUALITY, 88])
     _log(route="straighten", result="straightened", ms=round((time.time() - t0) * 1000))
     return _resp(200, {"status": "straightened", "image": base64.b64encode(buf.tobytes()).decode(),

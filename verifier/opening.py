@@ -70,14 +70,17 @@ def fallback(w: int, h: int) -> np.ndarray:
     return np.array([[m, n], [w - m, n], [w - m, h - n], [m, h - n]])
 
 
-def propose(img: np.ndarray) -> np.ndarray | None:
-    """A suggested opening quad in img pixels, or None. Largest convex 4-point contour that validates."""
+def propose(img: np.ndarray, alive=None) -> np.ndarray | None:
+    """A suggested opening quad in img pixels, or None. Largest convex 4-point contour that validates. `alive()`
+    returning False (the request's time is up) stops the search with no suggestion."""
     h, w = img.shape[:2]
     g = grey_at_long_edge(img, PROPOSE_LONG)
     s = w / g.shape[1]
     e = cv2.dilate(cv2.Canny(cv2.GaussianBlur(g, (5, 5), 0), 40, 120), np.ones((3, 3), np.uint8))
     best, best_area = None, 0.0
     for c in cv2.findContours(e, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[0]:
+        if alive is not None and not alive():
+            return None
         hull = cv2.convexHull(c)
         a = cv2.contourArea(hull)
         if a < MIN_AREA * g.shape[0] * g.shape[1] or a <= best_area:
