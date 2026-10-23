@@ -18,7 +18,17 @@ always say what is inside a reused jar). This entry is the vision engine behind 
 a web page so that anyone can try it.
 
 ## 3. What it does
-One shelf photo goes through an agent loop. **OpenCV's evidence decides each next action:**
+The page follows the Glass Pantry app's pipeline (docs/pipeline.md): **pick the fridge** (layouts exported from the
+app's catalogue) → **trace each compartment over a photo** → **fill each shelf, drawer or door bin from its own
+photo**. A person confirms every layout and every list; the fridge is kept in the browser tab only.
+
+**Tracing a compartment (no model call).** OpenCV suggests the opening's four corners (largest convex quadrilateral
+passing area, angle and foreshortening checks; shown dashed as a suggestion), the person drags them onto the opening
+and confirms, OpenCV straightens the opening plane with `warpPerspective` and marks real horizontal edges (Canny +
+Hough row profile) where a shelf line the person drops will land. A removed shelf's things move to "Unplaced"; nothing
+is ever deleted. A photo whose opening cannot be framed is traced unstraightened and labelled unverified.
+
+**Filling a level.** One shelf photo goes through an agent loop. **OpenCV's evidence decides each next action:**
 
 1. **Frames.** One canonical image (1568 px long edge) is used by every check and sent to the model, so no check
    can pass a different photo from the one that is read. The full-resolution original is kept for close-ups.
@@ -62,6 +72,9 @@ One shelf photo goes through an agent loop. **OpenCV's evidence decides each nex
 | Shelf check | `Canny`, `HoughLinesP` (OpenCV 5 N×4 output) | ask about a shelf the photo does not show |
 | Close-up selection | box geometry, `Laplacian` variance at a fixed scale | which items get a second look; which are left unresolved |
 | Crops | `resize` (`INTER_AREA`), `imencode` | the evidence the second look sees |
+| Opening suggestion | `Canny`, `findContours`, `convexHull`, `approxPolyDP`, quad validation | four dashed corners a person confirms or moves |
+| Straightening | `getPerspectiveTransform`, `warpPerspective` | a front view of the opening plane to trace on |
+| Snap edges | `Canny`, `HoughLinesP` row profile on the straightened view | where a dropped shelf line lands |
 | Change detection (experiment) | `SIFT`, `BFMatcher` kNN + ratio test, `findHomography` with `USAC_MAGSAC`, `warpPerspective`, gradient ZNCC | per old item: unchanged / possible change / cannot compare |
 
 ## 5. AWS deployment
