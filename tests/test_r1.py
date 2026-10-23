@@ -7,6 +7,13 @@ from verifier import claude, decide, frames, scan, zoom
 from tests.test_v2 import FakeAsker, FakeProposer, item, jpeg
 
 
+
+@pytest.fixture(autouse=True)
+def _recount_on(monkeypatch):
+    """The count re-read logic stays tested; production has it off (test_v2: test_count_re_reads_are_off_in_production)."""
+    from verifier import zoom as _z
+    monkeypatch.setattr(_z, "RECOUNT", True)
+
 def fake_api(monkeypatch, replies):
     """replies: list of (stop, text) returned in order by claude.call."""
     calls = []

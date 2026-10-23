@@ -23,6 +23,9 @@ SHARP_LONG = 400  # boxes are reduced to this long side before measuring (24 MP 
 EDGE = 2  # px from the photo edge that counts as touching it
 PAD = 0.35  # crop margin around the box, as a share of its larger side
 BUDGET = 4  # crop calls per scan, fixed before any test
+# Count re-reads are off: on the held-out test photos (10/23) all 5 were false alarms, because the close-up counted
+# packages (one egg tray) where the first reading counted units (30 eggs). Label re-reads stay on.
+RECOUNT = False
 CROP_LONG = 1568  # a crop larger than this is reduced (the model refuses images over its size limit)
 
 
@@ -87,7 +90,7 @@ def select(canon: np.ndarray, original: np.ndarray, scale: float, items: list[di
             fields.add("label")
             why.append(f"small_label:{area:.4f}")
         q = it.get("quantity")
-        if isinstance(q, (int, float)) and not isinstance(q, bool) and q >= 2:
+        if RECOUNT and isinstance(q, (int, float)) and not isinstance(q, bool) and q >= 2:
             if b[0] <= EDGE or b[1] <= EDGE or b[2] >= w - EDGE or b[3] >= h - EDGE:
                 skipped.append((it["id"], "quantity", "unresolved:truncated"))
             else:

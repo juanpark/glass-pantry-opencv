@@ -9,6 +9,13 @@ from verifier import decide, frames, prompt, scan, zoom
 from verifier.scan import Proposal
 
 
+
+@pytest.fixture(autouse=True)
+def _recount_on(monkeypatch):
+    """The count re-read logic stays tested; production has it off (test_v2: test_count_re_reads_are_off_in_production)."""
+    from verifier import zoom as _z
+    monkeypatch.setattr(_z, "RECOUNT", True)
+
 def jpeg(img, q=92) -> bytes:
     return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, q])[1].tobytes()
 
@@ -247,3 +254,9 @@ def test_sharpness_is_measured_at_400_px_and_small_boxes_are_not_enlarged():
     gs = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
     assert abs(zoom._sharpness(big, (0, 0, 300, 300)) - cv2.Laplacian(gs, cv2.CV_64F).var()) < 1e-6
     assert zoom.BLURRY == 60.0 and zoom.SHARP_LONG == 400
+
+
+def test_count_re_reads_are_off_in_production():
+    import importlib
+    from verifier import zoom as z
+    assert importlib.reload(z).RECOUNT is False
