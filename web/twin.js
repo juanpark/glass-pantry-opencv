@@ -159,6 +159,15 @@ export function rescanItems(twin, rec) {
     && it.box.every(Number.isFinite) && it.box[2] > it.box[0] && it.box[3] > it.box[1]);
 }
 
+/** Who a rescan record belongs to: the fridge, holder and layout revision at the moment the photo is confirmed.
+ * Taken before any await; checked again just before the record is written (a switch or re-trace in between wins). */
+export function recordOwner(twin, level) {
+  return {twin: twin.id, level, rev: twin.rev[holderOf(twin, level)] || 0};
+}
+export function ownerStill(twin, o) {
+  return !!twin && twin.id === o.twin && isLive(twin, o.level) && (twin.rev[holderOf(twin, o.level)] || 0) === o.rev;
+}
+
 /** Move one Unplaced thing (with the person's edits) onto a live holder, in one change. */
 export function placeUnplaced(twin, index, dest, edits = {}) {
   if (!(index >= 0 && index < twin.unplaced.length)) return {error: "no_such_thing"};

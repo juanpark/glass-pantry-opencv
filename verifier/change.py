@@ -246,12 +246,22 @@ def compare(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignme
             continue
         x0, y0, x1, y1 = box
         moved = cv2.transform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), M).reshape(-1, 2)
+        # where the item's own points put it must be in view too, not only where the shelf-wide fit puts it
+        here = np.zeros((nh, nw), np.uint8)
+        cv2.fillConvexPoly(here, moved.astype(np.int32), 1)
+        m_area = float(abs(cv2.contourArea(moved)))
+        m_cov = float((here & valid).sum()) / m_area if m_area > 0 else 0.0
+        mb = _clip(moved, nw, nh)
+        if m_cov < MIN_COVERAGE or mb[2] - mb[0] < 8 or mb[3] - mb[1] < 8:
+            out.append({**rec, "outcome": CANNOT, "box_now": None, "why": "partly_out_of_view",
+                        "coverage": round(m_cov, 3)})
+            continue
         size = max(x1 - x0, y1 - y0) * float(np.sqrt(abs(np.linalg.det(M[:, :2]))))
         off = float(np.linalg.norm(moved.mean(0) - pts.mean(0)))
         if off > MOVED_BY * size:
-            out.append({**rec, "outcome": MOVED, "box_now": _clip(moved, nw, nh), "box_expected": b})
+            out.append({**rec, "outcome": MOVED, "box_now": mb, "box_expected": b})
         else:
-            out.append({**rec, "outcome": SAME, "box_now": b})
+            out.append({**rec, "outcome": SAME, "box_now": mb})  # the accepted footprint, from the item's own fit
     kinds = {o["outcome"] for o in out}
     overall = (CHANGED if kinds & {CHANGED, MOVED} else
                (CANNOT if CANNOT in kinds or not out else OLD_ITEMS_SAME))

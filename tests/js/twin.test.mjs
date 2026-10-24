@@ -308,3 +308,15 @@ test("a rescan record sends only things still on that holder, with a usable box,
   assert.deepEqual(T.rescanItems(tw, rec).map(i => i.pid), ["p:i1"]);
   assert.deepEqual(T.rescanItems(tw, {...rec, twin: "other"}), []);
 });
+
+// Codex R1 #3: a record's owner is taken when the photo is confirmed, never from the page's twin after an await
+test("a rescan record's owner is fixed at confirm time and checked before writing", () => {
+  const row = {key: "k", version: 1, compartments: [{id: "c", levels: [{id: "c/1", kind: "shelf", top: 0, floor: 1}]}], panels: []};
+  const a = T.newTwin(row, "sha", () => 0.1), b = T.newTwin(row, "sha", () => 0.9);
+  const owner = T.recordOwner(a, "c/1");
+  assert.equal(owner.twin, a.id);
+  assert.ok(T.ownerStill(a, owner));
+  assert.ok(!T.ownerStill(b, owner), "a fridge switched during the save");
+  const retraced = T.applyTrace(a, "c", [0.5]).next;
+  assert.ok(!T.ownerStill(retraced, owner), "the holder's layout changed during the save");
+});

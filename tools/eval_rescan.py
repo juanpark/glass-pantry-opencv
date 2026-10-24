@@ -44,22 +44,31 @@ def overlaps(a, b) -> bool:
 
 
 def score(p: dict, r: dict, regions: list, al) -> dict:
+    """The frozen measures (private/docs/EVAL-opencv-rescan.md). A removal counts as flagged only as "possible change"
+    or "cannot compare" (never as moved). A moved thing is its own case: flagged when not called unchanged, and its
+    new place found when a new region, a changed spot (read) or the moved box covers it."""
     by = {o["id"]: o["outcome"] for o in r["items"]}
-    # read (changed spots) or found at a new place (moved): either covers a thing that is now somewhere new
-    asked = [o["box_now"] for o in r["items"] if o["outcome"] in (change.CHANGED, change.MOVED) and o.get("box_now")]
-    removed = p.get("removed", [])
-    added = p.get("added", [])
-    stayed = [i for i in by if i not in removed]
+    box = {o["id"]: o.get("box_now") for o in r["items"]}
+    asked = [o["box_now"] for o in r["items"] if o["outcome"] == change.CHANGED and o.get("box_now")]
+    removed, added = p.get("removed", []), p.get("added", [])
+    moved = p.get("moved", [])  # [{"id", "to": box in the after photo}]
+    moved_ids = [m["id"] for m in moved]
+    stayed = [i for i in by if i not in removed and i not in moved_ids]
+    covers = lambda place, extra=(): any(overlaps(place, g) for g in regions + asked + list(extra))
     return {
         "aligned": al.ok,
-        "removed_flagged": sum(by.get(i) in (change.CHANGED, change.CANNOT, change.MOVED) for i in removed),
+        "removed_flagged": sum(by.get(i) in (change.CHANGED, change.CANNOT) for i in removed),
         "removed": len(removed),
+        "moved_flagged": sum(by.get(m["id"]) in (change.CHANGED, change.CANNOT, change.MOVED) for m in moved),
+        "moved_to_found": sum(covers(m["to"], [box[m["id"]]] if by.get(m["id"]) == change.MOVED and box.get(m["id"]) else [])
+                              for m in moved),
+        "moved": len(moved),
         "false_flags": sum(by[i] in (change.CHANGED, change.MOVED) for i in stayed),
-        # an added (or moved-to) place is found when a new region, a changed spot or a moved item's box covers it
-        "added_found": sum(any(overlaps(a, g) for g in regions + asked) for a in added),
+        "added_found": sum(covers(a) for a in added),
         "added": len(added),
         # "also_new": something really new in view that the owner's note did not list; not required, not false
-        "false_new": sum(not any(overlaps(g, a) for a in added + p.get("also_new", [])) for g in regions),
+        "false_new": sum(not any(overlaps(g, a) for a in added + [m["to"] for m in moved] + p.get("also_new", []))
+                         for g in regions),
         "rereads_saved": sum(v == change.SAME for v in by.values()),
         "items": len(by),
     }
@@ -99,10 +108,12 @@ def main():
             ms = round((time.perf_counter() - t) * 1000)
             s = score(p, r, regions, al)
             rows.append({"pair": p["name"], "method": m, "ms": ms, "alignment": al.to_dict(), **s,
-                         "outcomes": {o["id"]: o["outcome"] for o in r["items"]}, "regions": regions})
+                         "outcomes": {o["id"]: o["outcome"] for o in r["items"]}, "items": r["items"],
+                         "regions": regions})
             cv2.imwrite(str(out / f"{p['name']}__{m}.jpg"), draw(fa.image, r, regions), [cv2.IMWRITE_JPEG_QUALITY, 85])
             print(f"{p['name']:<10} {m:<8} aligned={s['aligned']!s:<5} inl={al.inliers:<4} ov={al.overlap:<5} "
-                  f"removed {s['removed_flagged']}/{s['removed']}  false={s['false_flags']}  "
+                  f"removed {s['removed_flagged']}/{s['removed']}  moved {s['moved_flagged']}/{s['moved']} "
+                  f"to {s['moved_to_found']}/{s['moved']}  false={s['false_flags']}  "
                   f"added {s['added_found']}/{s['added']}  false_new={s['false_new']}  "
                   f"saved {s['rereads_saved']}/{s['items']}  {ms} ms")
     (out / "results.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1))

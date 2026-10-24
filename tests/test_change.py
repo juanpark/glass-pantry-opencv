@@ -173,3 +173,17 @@ def test_a_reshoot_with_the_phone_turned_a_quarter_still_aligns_in_the_given_fra
     x0, y0, x1, y1 = a["box_now"]
     assert x1 <= turned.shape[1] and y1 <= turned.shape[0]  # boxes are in the turned photo's own pixels
     assert change.new_regions(old, ITEMS, turned, al) == []
+
+
+def test_an_item_whose_own_matches_put_it_partly_outside_the_photo_cannot_be_compared():
+    """Codex R1 #4: the shelf-wide fit says the box is in view, but the item's own matched points move it partly out
+    of the photo; that is not 'no visible change'."""
+    img = np.full((600, 1000, 3), 128, np.uint8)
+    rng = np.random.default_rng(1)
+    bg_old = rng.uniform(0, 1000, (200, 2)).astype(np.float32) * [1, 0.6]
+    item_old = np.float32([[800 + 190 * a, 250 + 200 * b] for a, b in rng.uniform(0.1, 0.9, (12, 2))])
+    m_old = np.vstack([bg_old, item_old])
+    m_new = np.vstack([bg_old, item_old + [70, 0]])  # background still; the item's points moved 70 px right
+    al = change.Alignment(True, np.eye(3).tolist(), 200, 1.0, 1.0, "", "learned", m_old, m_new, m_old, m_new)
+    r = change.compare(img, [{"id": "edge", "box": [800, 250, 990, 450]}], img, al)
+    assert r["items"][0]["outcome"] == change.CANNOT, r

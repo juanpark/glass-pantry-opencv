@@ -166,9 +166,10 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
     </div>
     <div id="rescanBox" hidden>
       <p class="note ask" style="font-size:.85rem"><b>Experimental.</b> OpenCV 5 lines this photo up with the last one
-        (ALIKED + LightGlue) and checks each thing on its own. On our 6 test pairs it caught every real change and was
-        quiet on both unchanged shelves, but on 2 pairs it also asked about 3 or 4 things that had not changed. Every
-        flag is a question: nothing leaves this shelf unless you say so.</p>
+        (ALIKED + LightGlue) and checks each thing on its own. On our six test pairs the annotated removals, arrivals
+        and the move were covered; the two unchanged shelves had no false item flags but 2 and 1 false "new" spots,
+        and two other pairs had 3 and 4 false flags, over the limit we set, so this stays experimental. Every flag is
+        a question: nothing leaves this shelf unless you say so.</p>
       <ul class="items" id="rescanQs"></ul>
       <div id="rescanNewBox" hidden>
         <h2 style="font-size:.95rem">Read in the marked spots</h2>
@@ -262,7 +263,8 @@ async function init(){
 }
 function gate(){
   const on = $("#consent").checked;
-  for(const id of ["tracePick", "fillPick", "identifyPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+  for(const id of ["tracePick", "fillPick", "identifyPick", "rescanPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+  $("#rescanRead").disabled = !on;
 }
 
 function selectModel(key){  // every way of choosing a fridge (the list, an identify suggestion) withdraws an open question
@@ -808,7 +810,7 @@ $("#fillOk").onclick = () => {
   fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
   const fr = (fill.res.trace || []).find(s => s.step === "frames");
   const boxes = ((fill.res.proposal || {}).items || []).map(it => ({pid:`${source}:${it.id}`, box:it.box}));
-  if(fr) saveRescan(fill.level, fill.blob, fr.size, boxes.filter(b => add.some(a => a.pid === b.pid)));
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.blob, fr.size, boxes.filter(b => add.some(a => a.pid === b.pid)));
   $("#fillList").hidden = true; fill.res = null;
   openFillKeep();
   render();
@@ -819,51 +821,66 @@ $("#fillOk").onclick = () => {
 const REC_LONG = 1568;  // the size the engine measures at (frames.LONG), so the page runs what was tested
 function rescanAll(){ try{ return JSON.parse(store().getItem(T.RESCAN_KEY) || "{}") || {}; }catch{ return {}; } }
 function rescanRec(level){ const r = rescanAll()[level]; return r && r.twin === twin.id ? r : null; }
-async function saveRescan(level, blob, size, items){  // best effort: without it, only "Photograph it" is offered
+const recGen = {};  // per holder: only the newest confirmed photo may become its record
+async function saveRescan(owner, blob, size, items){  // best effort: without it, only "Photograph it" is offered
+  const level = owner.level, gen = recGen[level] = (recGen[level] || 0) + 1;  // taken before any await
   try{
     const small = await shrink(blob, REC_LONG);
     const img = await loadImg(URL.createObjectURL(small));
     const k = img.naturalWidth / size[0];
-    const rec = {twin:twin.id, level, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
+    const rec = {twin:owner.twin, level, rev:owner.rev, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
                  items:items.filter(i => Array.isArray(i.box)).map(i => ({pid:i.pid, box:i.box.map(v => v * k)}))};
+    // a fridge switch, a re-trace or a newer confirmed photo while this one was prepared: this one is not kept
+    if(recGen[level] !== gen || !T.ownerStill(twin, owner)) return;
     const all = rescanAll(); all[level] = rec;
     store().setItem(T.RESCAN_KEY, JSON.stringify(all));
   }catch{ /* storage full or refused: the shelf can still be photographed in full */ }
-  if(fill && fill.level === level) $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(level)).length;
+  if(fill && fill.level === level && twin) $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(level)).length;
 }
 const RESCAN_SAY = {retake:"Take a new photo: it failed the quality check, so no model was called.",
   full_read:"These two photos could not be lined up (a different view, or too little in common). Use Photograph it for a full reading.",
-  file:"Nothing changed: everything is where it was. No model was called."};
+  file:"No change found among the things compared. Things this page does not track, and additions OpenCV missed, are not ruled out. No model was called."};
+const CONSENT = "Tick “I understand and want to send photos” at the top first.";
 $("#rescanPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
-  const rec = rescanRec(fill.level), items = T.rescanItems(twin, rec);
+  if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
+  const ctx = fill, my = ctx.op = ops.start("fill");  // a newer pick, a close or another holder makes this one stale
+  const rec = rescanRec(ctx.level), items = T.rescanItems(twin, rec);
   if(!items.length) return;
-  fill.ticket = T.ticket(twin, fill.level); fill.res = null;
-  try{ fill.rescan = {blob:await shrink(f), rec, items, res:null}; }
-  catch(err){ fillNote(err.message === "decode" ? UNREADABLE : "This photo could not be opened.", "bad"); return; }
-  sendRescan(false);  // OpenCV only first: questions and marked spots, no model call
+  ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
+  let blob;
+  try{ blob = await shrink(f); }
+  catch(err){ if(fill === ctx && ops.live(my)) fillNote(err.message === "decode" ? UNREADABLE : "This photo could not be opened.", "bad"); return; }
+  if(fill !== ctx || !ops.live(my)) return;
+  ctx.rescan = {blob, rec, items, res:null};
+  sendRescan(ctx, my, false);  // OpenCV only first: questions and marked spots, no model call
 });
-$("#rescanRead").onclick = () => { if(fill && fill.rescan) sendRescan(true); };
-async function sendRescan(read){
-  const my = fill.op = ops.start("fill"), rs = fill.rescan;
+$("#rescanRead").onclick = () => { if(fill && fill.rescan) sendRescan(fill, fill.op = ops.start("fill"), true); };
+async function sendRescan(ctx, my, read){
+  const rs = ctx.rescan, live = () => fill === ctx && ops.live(my);
+  if(!live()) return;
+  if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
   fillNote(""); for(const s of ["#fillList", "#fillStage", "#rescanBox"]) $(s).hidden = true;
   $("#fillBusyText").textContent = read ? "Reading the marked spots…" : "Comparing with the last photo…"; $("#fillBusy").hidden = false;
   try{
+    const photo = await b64(rs.blob);
+    if(!live() || !$("#consent").checked) return;  // checked again right before the upload
     const r = await fetch("rescan", {method:"POST", headers:{"content-type":"application/json"},
-      body:JSON.stringify({old:rs.rec.photo, photo:await b64(rs.blob), items:rs.items.map(i => ({id:i.pid, box:i.box})), read})});
+      body:JSON.stringify({old:rs.rec.photo, photo, items:rs.items.map(i => ({id:i.pid, box:i.box})), read})});
     const body = await r.json();
-    if(!fillLive(my)) return;
+    if(!live()) return;
     if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
     rs.res = body;
     showRescan(body, URL.createObjectURL(rs.blob), my, read);
-  }catch{ if(fillLive(my)) fillNote("The photo could not be sent. Check the connection and try again.", "bad"); }
-  finally{ if(fillLive(my)){ $("#fillBusy").hidden = true; $("#fillBusyText").textContent = "Reading the photo, about 40 seconds…"; } }
+  }catch{ if(live()) fillNote("The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(live()){ $("#fillBusy").hidden = true; $("#fillBusyText").textContent = "Reading the photo, about 40 seconds…"; } }
 }
 function nameOf(pid){ const it = (twin.items[fill.level] || []).find(i => i.pid === pid); return it ? (it.label || it.appearance || "a thing") : "a thing"; }
 const RESCAN_COLOUR = {no_visible_change:"#2e8b57", possible_change:"#c0392b", moved:"#9b59b6", cannot_compare:"#8a948e"};
 function showRescan(res, url, my, read){
   const fr = (res.trace || []).find(s => s.step === "frames");
-  if(RESCAN_SAY[res.action]){ fillNote(RESCAN_SAY[res.action], res.action === "file" ? "ok" : "bad"); }
+  const movedN = (res.items || []).filter(o => o.outcome === "moved").length;
+  if(RESCAN_SAY[res.action]){ fillNote(RESCAN_SAY[res.action] + (res.action === "file" && movedN ? ` ${movedN} thing(s) moved on this shelf and stay here.` : ""), res.action === "file" ? "ok" : "bad"); }
   else fillNote("Something changed. Please answer below.", "ask");
   const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = new Image();
   img.onload = () => {
@@ -937,7 +954,7 @@ $("#rescanOk").onclick = () => {
   if((gone.length || add.length) && !commit(next, fillNote)) return;
   // the new photo becomes the one the next rescan compares with: things still here, where they stand now
   const keep = (res.items || []).filter(o => !gone.includes(o.id) && o.box_now).map(o => ({pid:o.id, box:o.box_now}));
-  if(fr) saveRescan(fill.level, fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))]);
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))]);
   fillNote(`Done: ${gone.length} moved to Unplaced, ${add.length} added. Nothing else changed.`, "ok");
   $("#rescanBox").hidden = true; fill.rescan = null;
   openFillKeep(); render();
