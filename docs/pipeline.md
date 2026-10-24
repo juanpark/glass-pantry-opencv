@@ -35,14 +35,15 @@ Rules the page keeps (`web/fridge.html`):
 
 ## How items are drawn
 
-**Built (this web page):** a schematic 3D view. Each placed thing is a box or cylinder from a basic family (bottle,
-can, jar, carton, tub, tray, pouch, bag, box) chosen by the scan's vessel word; the shelf photo's item box guides
-horizontal position, width and height, clamped inside its own level; depth is approximate. Door bins, retired levels
-and Unplaced are not drawn in 3D (`web/scene.js`).
+**Built (this web page):** a library model when the reading matches a row of the app's item catalogue (the app's
+52 baked models, exported by `tools/export_items.py`; the app's longest-word rule; catalogue size, scaled down only to
+fit the level). Otherwise a box or cylinder from a basic family (bottle, can, jar, carton, tub, tray, pouch, bag, box)
+chosen by the scan's vessel word, with the thing's own photo crop on its front. The shelf photo's item box guides
+horizontal position and size; depth comes from where its foot stands in the photo (approximate). Door bins, retired
+levels and Unplaced are not drawn in 3D (`web/scene.js`).
 
-**Planned (phone app and later this page):** a library model when the item matches a row of the app's item catalogue;
-otherwise the nearest basic shape at the size the photo shows; the label taken from the photo by flattening a flat
-face with a homography. Per-product models are upgrades for common items, not a requirement.
+**Planned:** the label flattened from the photo with a homography onto a flat face; per-product models are upgrades
+for common items, not a requirement.
 
 ## Beyond the fridge
 

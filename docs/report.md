@@ -22,8 +22,9 @@ benefit and usability have not been measured.
 
 ## 3. What it does
 The page follows the app's steps (docs/pipeline.md): **pick the fridge** → **trace each compartment over a photo** →
-**fill each shelf or drawer from its own photo**. A person confirms every layout and every list; the fridge is kept
-in the browser tab only (session storage). The browser prototype supports catalogue appliances; cupboards, pantries
+**fill each shelf or drawer from its own photo**. A person confirms every layout and every list; the fridge, and the last photo of each shelf, are kept
+in this browser on this device (local storage), never on the server. One tab writes at a time (Web Locks; another tab
+opens read-only), and a Forget button removes both; a browser without Web Locks keeps the fridge in that tab only. The browser prototype supports catalogue appliances; cupboards, pantries
 and nested containers are future work.
 
 **Picking the fridge (one model call).** The person photographs the model sticker or the fridge. OpenCV's photo
@@ -50,10 +51,14 @@ draws nothing of its own. A removed shelf's things move to "Unplaced"; nothing i
 cannot be framed may be traced unstraightened and is labelled unverified; even then an outline the lines cannot be
 drawn through (crossed corners, a corner on the diagonal, under 5% of the photo) is refused.
 
-**Seeing the fridge in 3D (no model call).** The web 3D view draws live compartment shelves and drawers and their
-placed items as schematic boxes or cylinders (three.js). The shelf photo's item boxes guide horizontal position,
-width and height, clamped to stay inside the item's own level; depth is approximate, not reconstructed or measured.
-Older rows without placement are spread evenly. Door bins, retired levels and Unplaced things are not drawn in 3D.
+**Seeing the fridge in 3D (no model call).** The web 3D view (three.js) draws live compartment shelves and drawers and
+their things. A thing whose reading names a row of the phone app's item library (52 baked models, matched by the app's
+own rule: the longest match word wins) is drawn with that model at its catalogue size, scaled down only to fit its
+level; any other thing is a basic box or cylinder carrying its own crop from the shelf photo on the front. The shelf
+photo's item boxes guide horizontal position and size; depth comes from where the thing's foot stands in the photo,
+and is approximate, not reconstructed or measured. Older rows without placement are spread evenly. After a confirmed
+*What changed?*, the view glides to that shelf and plays the change: gone things fade out, moved things slide, new
+things drop in. Door bins, retired levels and Unplaced things are not drawn in 3D.
 The geometry is a pure function of the twin (`web/scene.js`, tested on all 16 layouts) and never changes the twin.
 
 **Filling a level.** One shelf photo goes through an agent loop in which OpenCV measurements gate the model call,
@@ -103,18 +108,20 @@ still include a neighbour's things, and the person reviews the list as before. T
 offered again on the next photo of that shelf.
 
 **What changed? (experimental).** After a shelf has been filed, its photo (long edge at most 1568 px) and item boxes are kept
-in the tab beside the fridge. A later photo of the same shelf is first compared by OpenCV alone, with no model call:
+in the browser beside the fridge. A later photo of the same shelf is first compared by OpenCV alone, with no model call:
 each known item is *no visible change*, *possible change*, *moved* or *cannot compare*, and regions with something
 new are marked. Only then may the person ask the model to read the marked spots (one admission, at most 6 crops).
+The page shows the result as the last photo above the new one, joined by up to 60 of the matched point
+pairs the alignment kept (display only), with each thing boxed by its outcome and one sentence of what OpenCV did.
 Apply moves things that are gone to Unplaced (never deleted), adds the ticked new rows and updates moved things'
 place in the 3D view. It failed its pre-set bar (§6) and is labelled experimental on the page.
 
 ![Architecture: browser, AWS Lambda with OpenCV 5, Anthropic API](architecture/architecture.png)
 
-The browser holds the fridge (session storage) and draws it. The picture shows the scan, identify and straighten
-paths: the Lambda container receives one photo per request, keeps it in memory only for that request, runs the
-OpenCV steps, and calls the Anthropic API. *What changed?* (`POST /rescan`) is a second route not drawn there: it
-receives two photos (the last confirmed one, kept in the tab, and the new one), also only in memory. Its first pass
+The browser holds the fridge (local storage, this device) and draws it. The picture shows all four routes: for
+scan, identify and straighten the Lambda container receives one photo per request, keeps it in memory only for that
+request, runs the OpenCV steps, and calls the Anthropic API. *What changed?* (`POST /rescan`) receives two photos (the
+last confirmed one, kept in the browser, and the new one), also only in memory. Its first pass
 is OpenCV only, with no admission and no model call; the optional reading of the marked spots takes one admission,
 and only when a spot is actually read. A shelf scan or a
 fridge identification takes one admission from the DynamoDB daily counter before any model call (identify's quality
@@ -251,8 +258,9 @@ pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 f
 - The label judge is a model too. It can call two different products "the same" (we saw a misread brand judged
   equal to the real one).
 - Browser uploads are reduced to 3024 px; development runs used full-resolution files.
-- The 3D view is schematic (approximate depth, no door bins) and needs WebGL and a CDN (three.js 0.160.0); if it
-  cannot load, the 2D drawing stays.
+- The 3D view is approximate (depth from the photo, sizes from the library or the photo, no door bins) and needs
+  WebGL and a CDN (three.js 0.160.0); if it cannot load, the 2D drawing stays. Library models match by words in the
+  reading, so a container named for its look (a lidded tub) may get a generic tub model.
 - **What changed?** failed its pre-set bar on false flags (§6). Things leaning on or hidden behind a removed item
   look changed and are asked about; soft packs that shift do too. It compares one plane (a homography), so strong
   parallax between the two photos raises questions. Items the first reading never listed are not tracked. The band
