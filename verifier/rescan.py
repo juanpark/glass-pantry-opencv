@@ -22,6 +22,7 @@ import cv2
 
 from . import change, decide, frames as frames_mod, gate
 
+SHOW_PAIRS = 60  # matched pairs returned for the page to draw between the two photos
 MAX_READS = 6  # crops sent to the model per rescan (read side by side); spots beyond it are reported unread
 PAD = 0.15  # crop margin around a region, as a share of its larger side
 QUALITY = 92
@@ -64,7 +65,7 @@ def run(old_jpeg: bytes, old_items: list[dict], new_jpeg: bytes, proposer, max_r
         return done("full_read", ["old_photo:unreadable"])
 
     al = change.align(old, f.image)
-    step("align", **al.to_dict() | {"H": None})
+    step("align", **al.to_dict() | {"H": None, "pairs": al.pairs(SHOW_PAIRS)})
     cmp = change.compare(old, old_items, f.image, al)
     if not al.ok:
         return done("full_read", [f"align:{al.why}"], cmp["items"])

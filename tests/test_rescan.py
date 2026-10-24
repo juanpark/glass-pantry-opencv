@@ -99,3 +99,18 @@ def test_a_refused_model_call_leaves_regions_unread_and_still_asks():
 
     r = rescan.run(_jpeg(old), ITEMS, _jpeg(new), Refusing())
     assert r["action"] == "ask" and r["new"][0]["items"] is None and r["new"][0]["unread"] == "daily_limit", r
+
+
+def test_the_align_step_shows_some_of_the_matched_points_that_agree():
+    # the page draws these as lines between the two photos; each must be a pair the alignment kept (an inlier)
+    import numpy as np
+    old = shelf(seed=3)
+    new, _ = reshoot(old)
+    r = rescan.run(_jpeg(old), ITEMS, _jpeg(new), Fake())
+    al = next(s for s in r["trace"] if s["step"] == "align")
+    pairs = al["pairs"]
+    assert 20 <= len(pairs) <= rescan.SHOW_PAIRS, len(pairs)
+    H = np.array(rescan.change.align(old, rescan.frames_mod.canonical(_jpeg(new)).image).H)
+    for xo, yo, xn, yn in pairs:
+        p = H @ [xo, yo, 1]
+        assert np.hypot(p[0] / p[2] - xn, p[1] / p[2] - yn) < 12, (xo, yo, xn, yn)

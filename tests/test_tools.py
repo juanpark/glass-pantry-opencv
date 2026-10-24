@@ -197,11 +197,11 @@ def test_the_3d_view_is_lazy_read_only_and_served():
     import json
     from service import handler as h
     p = _page()
-    d3 = _body(p, "async function draw3d(){", "\n}")
+    d3 = _body(p, "async function draw3d(from = null){", "\n}")
     assert 'import("./twin3d.js")' in d3 and "could not load" in d3
     assert "commit(" not in d3 and "T.commit(" not in d3
     assert "...placement(tr.dataset.id)" in p
-    for path in ("/scene.js", "/twin3d.js"):
+    for path in ("/scene.js", "/twin3d.js", "/compare.js"):
         r = h.handler({"rawPath": path, "requestContext": {"http": {"method": "GET"}}})
         assert r["statusCode"] == 200 and r["headers"]["content-type"].startswith("text/javascript")
     wf = (__import__("pathlib").Path(__file__).resolve().parent.parent / ".github/workflows/deploy.yml").read_text()

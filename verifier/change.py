@@ -67,6 +67,15 @@ class Alignment:
     pts_new: np.ndarray | None = field(default=None, repr=False, compare=False)
     m_old: np.ndarray | None = field(default=None, repr=False, compare=False)
     m_new: np.ndarray | None = field(default=None, repr=False, compare=False)
+    inlier: np.ndarray | None = field(default=None, repr=False, compare=False)  # which matched pairs H kept
+
+    def pairs(self, n: int) -> list[list[int]]:
+        """Up to n matched pairs the alignment kept, spread evenly, as [x_old, y_old, x_new, y_new] (full px)."""
+        if self.inlier is None:
+            return []
+        idx = np.flatnonzero(self.inlier)
+        idx = idx[np.linspace(0, len(idx) - 1, min(n, len(idx))).round().astype(int)] if len(idx) else idx
+        return [[round(float(v)) for v in (*self.m_old[i], *self.m_new[i])] for i in idx]
 
     def to_dict(self):
         return {k: getattr(self, k) for k in ("ok", "H", "inliers", "ratio", "overlap", "why", "method")}
@@ -162,7 +171,7 @@ def _align_once(old, new, method, turn) -> Alignment:
     why = "" if ok else ("few_inliers" if inl < MIN_INLIERS or ratio < MIN_INLIER_RATIO else "small_overlap")
     return Alignment(bool(ok), H.tolist(), inl, round(ratio, 3), round(min(overlap, 1.0), 3), why, method,
                      np.float32([k.pt for k in ka]) / sa,
-                     _unturn(np.float32([k.pt for k in kb]), turn, bw, bh) / sb, pa, pb)
+                     _unturn(np.float32([k.pt for k in kb]), turn, bw, bh) / sb, pa, pb, mask.ravel().astype(bool))
 
 
 def _grad(img):

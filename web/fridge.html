@@ -41,6 +41,8 @@ button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input[type=file]{display:none}
 label.consent{display:flex;gap:8px;align-items:flex-start}
+.say{font-size:1.02rem;font-weight:600;margin:0}
+.key{font-size:.8rem;margin:0}
 .note{padding:10px 12px;border-radius:6px;background:var(--code);font-size:.88rem}
 .note.ask{border-left:5px solid var(--ask)} .note.bad{border-left:5px solid var(--bad)} .note.ok{border-left:5px solid var(--ok)}
 svg{display:block;width:100%;height:auto;max-height:70vh;touch-action:manipulation}
@@ -162,7 +164,12 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <button id="bandCancel" type="button">Cancel</button>
     </div>
     <div id="fillNote" class="note" hidden></div>
+    <p id="rescanSay" class="say" hidden></p>
     <div class="stage" id="fillStage" hidden><canvas id="fillCv"></canvas></div>
+    <p id="rescanKey" class="muted key" hidden><b>Top:</b> the last photo. <b>Bottom:</b> the new one. Each line joins a
+      point OpenCV&nbsp;5 found in both. <span style="color:#2e8b57">■</span> still there
+      <span style="color:#9b59b6">■</span> moved <span style="color:#d98200">■</span> not seen where it was: you are asked
+      <span style="color:#2f6fb3">▭</span> looks new</p>
     <div id="fillList" hidden>
       <div class="tablewrap"><table>
         <thead><tr><th>Keep</th><th>What it looks like</th><th>Label</th><th>Count</th><th>Close-up check</th></tr></thead>
@@ -192,7 +199,8 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
 </main>
 
 <script type="module">
-import * as T from "./twin.js";  // the twin's rules (tested in tests/js); this file is the page around them
+import * as T from "./twin.js";
+import * as C from "./compare.js";  // the two photos and OpenCV's matches, drawn  // the twin's rules (tested in tests/js); this file is the page around them
 const $ = s => document.querySelector(s);
 const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it (the person's drop, never automatic)
 let LAYOUTS = [], LAYOUT_SHA = "";
@@ -348,12 +356,17 @@ function levelName(id){  // "Shelf 2", "Drawer 1": numbered within its kind, top
 function clip(t, n){ return t.length > n ? t.slice(0, n - 1) + "…" : t; }
 function count(id){ return (twin.items[id] || []).length; }
 
-let view3d = null;  // the 3D view: drawn from the same twin, read-only, loaded only when asked for
-async function draw3d(){
+let view3d = null, view3dGen = 0;  // the 3D view: drawn from the same twin, read-only, loaded only when asked for
+async function draw3d(from = null){  // from: the fridge before a change, so the change is shown moving
+  const my = ++view3dGen;  // only the newest request draws
   if(view3d){ view3d.dispose(); view3d = null; }
   if($("#view3d").hidden || !twin) return;
   $("#view3d").textContent = "";
-  try{ const m = await import("./twin3d.js"); if(!$("#view3d").hidden && !view3d) view3d = m.mount($("#view3d"), twin, row(twin.key)); }
+  try{
+    const m = await import("./twin3d.js");
+    if(my !== view3dGen || $("#view3d").hidden) return;
+    view3d = m.mount($("#view3d"), twin, row(twin.key), from);
+  }
   catch{ $("#view3d").textContent = "The 3D view could not load here; the drawing below shows the same fridge."; }
 }
 $("#view3dBtn").onclick = () => {
@@ -704,7 +717,7 @@ function openFill(id){
   $("#fillTitle").textContent = `Fill: ${holderName(id)}`;
   const ul = $("#fillHave"); ul.innerHTML = "";
   for(const it of twin.items[id] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : it.count === null ? " (count unknown)" : ""}`; ul.append(li); }
-  for(const s of ["#fillNote", "#fillStage", "#fillList", "#rescanBox"]) $(s).hidden = true;
+  for(const s of ["#fillNote", "#fillStage", "#fillList", "#rescanBox"]) $(s).hidden = true; $("#rescanKey").hidden = $("#rescanSay").hidden = true;
   $("#fillBusy").hidden = true;
   $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(id)).length;
   $("#fillCard").scrollIntoView({behavior:"smooth", block:"start"});
@@ -718,9 +731,9 @@ function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; 
 $("#fillPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
   const ctx = fill, my = ctx.op = ops.start("fill");  // a newer photo makes the older reply stale
-  endBand(null); $("#fillStage").hidden = true;  // the older band step ends now, even if this photo then fails to load
+  endBand(null); $("#fillStage").hidden = true; $("#rescanKey").hidden = $("#rescanSay").hidden = true;  // the older band step ends now, even if this photo then fails to load
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null;  // the fridge, holder and layout this photo is for
-  fillNote(""); $("#fillList").hidden = true; $("#rescanBox").hidden = true;
+  fillNote(""); $("#fillList").hidden = true; $("#rescanBox").hidden = true; $("#rescanKey").hidden = $("#rescanSay").hidden = true;
   try{
     const pick = await chooseBand(await shrink(f), lastBand(ctx.level), () => fillLive(my) && fill === ctx);
     if(!pick || !fillLive(my) || fill !== ctx) return;
@@ -916,7 +929,7 @@ $("#rescanPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
   if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
   const ctx = fill, my = ctx.op = ops.start("fill");  // a newer pick, a close or another holder makes this one stale
-  endBand(null); $("#fillStage").hidden = true;
+  endBand(null); $("#fillStage").hidden = true; $("#rescanKey").hidden = $("#rescanSay").hidden = true;
   const rec = rescanRec(ctx.level), items = T.rescanItems(twin, rec);
   if(!items.length) return;
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
@@ -932,7 +945,7 @@ async function sendRescan(ctx, my, read){
   const rs = ctx.rescan, live = () => fill === ctx && ops.live(my);
   if(!live()) return;
   if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
-  fillNote(""); for(const s of ["#fillList", "#fillStage", "#rescanBox"]) $(s).hidden = true;
+  fillNote(""); for(const s of ["#fillList", "#fillStage", "#rescanBox"]) $(s).hidden = true; $("#rescanKey").hidden = $("#rescanSay").hidden = true;
   $("#fillBusyText").textContent = read ? "Reading the marked spots…" : "Comparing with the last photo…"; $("#fillBusy").hidden = false;
   try{
     const photo = await b64(rs.blob);
@@ -948,26 +961,26 @@ async function sendRescan(ctx, my, read){
   finally{ if(live()){ $("#fillBusy").hidden = true; $("#fillBusyText").textContent = "Reading the photo, about 40 seconds…"; } }
 }
 function nameOf(pid){ const it = (twin.items[fill.level] || []).find(i => i.pid === pid); return it ? (it.label || it.appearance || "a thing") : "a thing"; }
-const RESCAN_COLOUR = {no_visible_change:"#2e8b57", possible_change:"#c0392b", moved:"#9b59b6", cannot_compare:"#8a948e"};
 function showRescan(res, url, my, read){
   const fr = (res.trace || []).find(s => s.step === "frames");
   const movedN = (res.items || []).filter(o => o.outcome === "moved").length;
   if(RESCAN_SAY[res.action]){ fillNote(RESCAN_SAY[res.action] + (res.action === "file" && movedN ? ` ${movedN} thing(s) moved on this shelf and stay here.` : ""), res.action === "file" ? "ok" : "bad"); }
   else fillNote("Something changed. Please answer below.", "ask");
-  const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = new Image();
-  img.onload = () => {
+  // the last photo above the new one: OpenCV's matched points joined, then each thing boxed by what was found
+  const rs = fill.rescan;
+  $("#rescanSay").textContent = read ? "" : C.summary(res); $("#rescanSay").hidden = read;
+  Promise.all([loadImg("data:image/jpeg;base64," + rs.rec.photo), loadImg(url)]).then(([oldImg, newImg]) => {
     if(!fillLive(my)) return;
-    cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
-    const k = fr ? img.naturalWidth / fr.size[0] : 1, lw = Math.max(3, cv.width / 300);
-    ctx.lineWidth = lw;
-    for(const o of res.items || []){ if(!o.box_now) continue; const b = o.box_now;
-      ctx.strokeStyle = RESCAN_COLOUR[o.outcome] || "#888"; ctx.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k); }
-    ctx.setLineDash([lw * 3, lw * 2]); ctx.strokeStyle = "#2f6fb3";
-    for(const n of res.new || []){ const b = n.rect; ctx.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k); }
-    ctx.setLineDash([]);
-    $("#fillStage").hidden = false;
-  };
-  img.src = url;
+    const cv = $("#fillCv"); cv.width = 1200;
+    $("#fillStage").hidden = false; $("#rescanKey").hidden = false;
+    const t0 = performance.now(), dur = read ? 1 : 2200;
+    (function frame(now){
+      if(!fillLive(my)) return;
+      const t = Math.min(1, (now - t0) / dur);
+      C.draw(cv, oldImg, newImg, res, rs.items, t);
+      if(t < 1) requestAnimationFrame(frame);
+    })(t0);
+  }).catch(() => {});
   if(res.action === "retake" || res.action === "full_read") return;
   const ul = $("#rescanQs"); ul.innerHTML = "";
   for(const o of res.items || []){
@@ -1020,6 +1033,7 @@ $("#rescanOk").onclick = () => {
               count:c.value, source, at:Date.now(), pid:`${source}:${tr.dataset.id}`, box:JSON.parse(tr.dataset.box)});
   }
   if(bad.length){ fillNote("A count must be a whole number of 1 or more, or left blank if you are not sure.", "bad"); return; }
+  const prev = twin;
   let next = twin;
   if(gone.length){ const r = T.unplaceItems(next, fill.ticket, gone); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
   if(add.length){ const r = T.addItems(next, fill.ticket, add.map(({box, ...a}) => a)); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
@@ -1035,8 +1049,12 @@ $("#rescanOk").onclick = () => {
   const keep = (res.items || []).filter(o => !gone.includes(o.id) && o.box_now).map(o => ({pid:o.id, box:o.box_now}));
   if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))], fill.rescan.band);
   fillNote(`Done: ${gone.length} moved to Unplaced, ${add.length} added, ${Object.keys(moves).length} moved on this shelf (3D updated). Nothing else changed.`, "ok");
-  $("#rescanBox").hidden = true; fill.rescan = null;
+  $("#rescanBox").hidden = true; fill.rescan = null; $("#rescanKey").hidden = $("#rescanSay").hidden = true;
   openFillKeep(); render();
+  if(twin !== prev){  // show the change in 3D: gone things fade out, moved ones slide, new ones drop in
+    $("#view3d").hidden = false; $("#view3dBtn").textContent = "Hide 3D view";
+    draw3d(prev); $("#view3d").scrollIntoView({behavior:"smooth", block:"center"});
+  }
 };
 
 function openFillKeep(){ const ul = $("#fillHave"); ul.innerHTML = "";
