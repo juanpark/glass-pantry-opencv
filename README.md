@@ -47,7 +47,7 @@ logs that hold codes and counts only.
 | `verifier/zoom.py` | the zoom pass: OpenCV selects, crops from the original, the model re-reads, the result is reconciled |
 | `verifier/decide.py` | evidence → file / ask / retake |
 | `verifier/scan.py` | one photo through the loop, with a timed trace of every step |
-| `verifier/change.py` | experiment, not in the service: what changed between two photos of a shelf |
+| `verifier/change.py`, `verifier/rescan.py` | What changed? (experimental): OpenCV 5 ALIKED + LightGlue alignment, per-item outcomes, new regions, `POST /rescan` |
 | `verifier/identify.py` | matches the model's sticker reading to the catalogue (exact, family, kind) |
 | `verifier/opening.py` | outline checks and straightening (`warpPerspective`); suggestions built but off |
 | `service/handler.py` | the Lambda handler: pages, health, recorded example, scan, identify, straighten |
