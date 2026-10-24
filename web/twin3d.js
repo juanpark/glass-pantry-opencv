@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
-import {sceneOf, cameraFor, levelBox, changeOf, firstShown} from "./scene.js";
+import {sceneOf, cameraFor, levelBox, changeOf, firstShown, setFade} from "./scene.js";
 
 const PALETTE = [0xd9a55b, 0x7fb3a6, 0xc96f5a, 0x8aa0c8, 0xb7c27a, 0xd08fb0, 0x9c8bd1, 0xe0c46c];
 
@@ -70,7 +70,7 @@ export function mount(host, twin, row, change = null, {lib = null, face = null} 
     const [, , , w, h, d] = p.box, c = centre(p.box);
     const geo = p.shape === "cyl" ? new THREE.CylinderGeometry(w / 2, w / 2, h, 24) : new THREE.BoxGeometry(w, h, d);
     const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({color: colour, roughness: 0.6, transparent: true});
-    const pic = !p.model && face && face(p.pid);  // no library model: the thing's own photo on its front
+    const pic = !p.model && face && face(p.level, p.pid);  // no library model: the thing's own photo on its front
     const m = new THREE.Mesh(pic ? new THREE.BoxGeometry(w, h, d) : geo, pic ? [mat, mat, mat, mat, mat.clone(), mat] : mat);
     if(pic) pic.then(c => { if(!alive || !c) return; const f = m.material[4]; f.map = new THREE.CanvasTexture(c); f.map.colorSpace = THREE.SRGBColorSpace; f.color.set(0xffffff); f.needsUpdate = true; });
     if(p.model) model(p.model).then(src => {  // the phone app's model replaces the block once it has loaded
@@ -79,7 +79,8 @@ export function mount(host, twin, row, change = null, {lib = null, face = null} 
       o.scale.set(w / sz.x, h / sz.y, d / sz.z);
       const c0 = bb.getCenter(new THREE.Vector3());
       o.position.set(-c0.x * w / sz.x, -c0.y * h / sz.y, -c0.z * d / sz.z);
-      o.traverse(n => { if(n.isMesh){ n.material = n.material.clone(); n.material.transparent = true; n.material.opacity = mat.opacity; } });
+      o.traverse(n => { if(n.isMesh) n.material = Array.isArray(n.material) ? n.material.map(x => x.clone()) : n.material.clone(); });  // per instance
+      setFade(o, g.userData.fade ?? 1);  // a model that loads mid-fade joins the fade
       g.remove(m); g.add(o);
     }).catch(() => {});  // no model: the block stays
     const t = tag(p.label); t.position.set(0, h / 2 + 30, 20);
@@ -122,7 +123,7 @@ export function mount(host, twin, row, change = null, {lib = null, face = null} 
     for(const m of moves){
       m.obj.position.lerpVectors(m.a, m.b, e);
       const o = m.fade === 1 ? e : m.fade === -1 ? 1 - e : 1;
-      m.obj.traverse(n => { for(const x of [n.material].flat()) if(x){ x.transparent = true; x.opacity = o; } });
+      m.obj.userData.fade = o; setFade(m.obj, o);
       if(m.fade === -1 && t >= 1 && m.obj.visible){ m.obj.visible = false; things.splice(things.indexOf(m.obj), 1); }
     }
   };

@@ -106,3 +106,16 @@ export function levelBox(parts, level) {
   const [w, h, d] = [0, 1, 2].map(i => hi[i] - lo[i]);
   return {at: [0, 1, 2].map(i => (lo[i] + hi[i]) / 2), w, h: Math.max(h, 120), d};
 }
+
+/** Fade a drawn thing to f (0..1): each material keeps its own opacity as the base, so see-through parts of a model stay
+ * see-through. Works on any tree of {material, children}. */
+export function setFade(root, f) {
+  const walk = o => {
+    for (const m of [o.material].flat()) if (m) {
+      m.userData.base ??= m.opacity;
+      m.opacity = m.userData.base * f; m.transparent = m.opacity < 1 || m.userData.base < 1;
+    }
+    for (const c of o.children || []) walk(c);
+  };
+  walk(root);
+}

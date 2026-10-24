@@ -168,3 +168,17 @@ test("a thing lower in its shelf photo stands further forward", () => {
   const [b, f] = sceneOf(t, A).parts.filter(p => p.kind === "item");
   assert.ok(f.box[2] > b.box[2] + 50, [b.box[2], f.box[2]]);
 });
+
+test("a fade multiplies each material's own opacity, so see-through parts stay see-through and instances fade alone", async () => {
+  const {setFade} = await import("../../web/scene.js");
+  const mat = o => ({opacity: o, transparent: o < 1, userData: {}});
+  const a = {children: [{material: mat(0.1), children: []}, {material: [mat(1), mat(1)], children: []}]};
+  const b = {children: [{material: mat(0.1), children: []}]};
+  setFade(a, 1); setFade(b, 1);
+  assert.deepEqual([a.children[0].material.opacity, a.children[1].material[0].opacity], [0.1, 1]);
+  setFade(a, 0.5);
+  assert.ok(Math.abs(a.children[0].material.opacity - 0.05) < 1e-9 && a.children[1].material[1].opacity === 0.5);
+  assert.equal(b.children[0].material.opacity, 0.1);
+  setFade(a, 1);
+  assert.equal(a.children[0].material.opacity, 0.1);
+});

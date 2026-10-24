@@ -359,13 +359,12 @@ function count(id){ return (twin.items[id] || []).length; }
 let libP = null;  // the phone app's item library (models + match words); without it, things are drawn as blocks
 const itemLib = () => libP ||= fetch("items/items.json").then(r => r.ok ? r.json() : {items: []}).then(j => j.items).catch(() => (libP = null, []));
 let view3d = null, view3dGen = 0;
-function photoFace(){  // pid -> Promise of a canvas: that thing cut from the last photo of its shelf (kept in this tab)
-  const where = new Map(), imgs = new Map();
-  for(const [level, r] of Object.entries(rescanAll())) if(r && r.twin === twin.id) for(const i of r.items || []) where.set(i.pid, {level, r, box:i.box});
-  return pid => {
-    const w = where.get(pid); if(!w) return null;
-    if(!imgs.has(w.level)) imgs.set(w.level, loadImg("data:image/jpeg;base64," + w.r.photo));
-    return imgs.get(w.level).then(img => {
+function photoFace(){  // (level, pid) -> Promise of a canvas: that thing cut from the last photo of its shelf (in this tab)
+  const find = T.facesOf(rescanAll(), twin.id), imgs = new Map();
+  return (level, pid) => {
+    const w = find(level, pid); if(!w) return null;
+    if(!imgs.has(level)) imgs.set(level, loadImg("data:image/jpeg;base64," + w.photo));
+    return imgs.get(level).then(img => {
       const [x0, y0, x1, y1] = w.box, c = document.createElement("canvas"), s = Math.min(1, 512 / Math.max(x1 - x0, y1 - y0));
       c.width = Math.max(1, Math.round((x1 - x0) * s)); c.height = Math.max(1, Math.round((y1 - y0) * s));
       c.getContext("2d").drawImage(img, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);

@@ -47,8 +47,8 @@ footer{font-size:.84rem}
   <header class="row" style="justify-content:space-between;align-items:flex-start">
     <div style="display:grid;gap:8px">
       <h1>Glass Pantry</h1>
-      <p class="lead">Photograph a shelf again, and OpenCV&nbsp;5 shows what changed before any AI is asked.
-        Your fridge stays true on your phone, and the AI reads only what moved.</p>
+      <p class="lead">Photograph a shelf again, and OpenCV&nbsp;5 shows what may have changed before any AI is asked.
+        Your fridge stays true on your phone, and the AI is asked only about the spots OpenCV marks.</p>
     </div>
     <span id="status" class="chip off">Checking…</span>
   </header>
@@ -74,7 +74,8 @@ footer{font-size:.84rem}
       <li><b>Photograph each shelf.</b> Claude lists what is on it; OpenCV checks the photo and has small labels read again
         up close. You confirm, and the shelf appears in a 3D fridge.</li>
       <li><b>Photograph it again later.</b> OpenCV lines the new photo up with the last one and checks each thing, with no
-        AI. Only the spots that changed are read by Claude. Gone things move to Unplaced, never deleted.</li>
+        AI. It marks possible changes and new spots; you may ask Claude to read just those. Things that only moved keep
+        their reading. Nothing leaves the shelf unless you say so, and then it moves to Unplaced, never deleted.</li>
     </ol>
   </section>
 
@@ -83,9 +84,9 @@ footer{font-size:.84rem}
     <ul class="res">
       <li><b>Photograph it again</b>, 6 before/after pairs: every removal, the move and the addition were found, but it
         <span class="fail">failed</span> its bar on false alarms (8 unchanged things asked about; classic SIFT: 38). So it
-        is marked experimental.</li>
+        is marked experimental. The page compares one shelf strip; that setup was not part of the test.</li>
       <li><b>Second looks at small labels:</b> no wrong first reading to catch in 28; no accuracy gain claimed.</li>
-      <li><b>Speed on AWS</b>, comparing two photos: 4.4 s (9.0 s on the first call).</li>
+      <li><b>Speed on AWS</b>, OpenCV comparing one recorded pair (a spot check): 4.4 s, 9.0 s on the first call.</li>
     </ul>
     <p class="muted" style="font-size:.84rem">One kitchen and few photos: these show behaviour, not general accuracy.</p>
   </section>
