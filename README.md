@@ -1,10 +1,17 @@
-# Glass Pantry Shelf Check (OpenCV AI Competition 2026)
+# Glass Pantry (OpenCV AI Competition 2026)
 
-A web prototype of the Glass Pantry workflow: find your fridge from its model sticker, trace each compartment over a
-photo, then photograph each shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 gates the photo,
-checks the model's shelf lines against real edges, straightens traced openings, and selects small labels for a
-re-read from the uploaded image (the browser sends at most 3024 px). The engine recommends **file**, **ask** or
-**retake**; a person confirms before anything is kept. The fridge lives in the browser tab, drawn in 2D and 3D.
+A fridge you can open on your phone, kept true by photos. A web prototype of the Glass Pantry workflow: find your
+fridge from its model sticker, trace each compartment over a photo, then photograph each shelf. A vision-language
+model (Claude) lists what it sees. OpenCV 5 gates the photo, checks the model's shelf lines against real edges,
+straightens traced openings, and selects small labels for a re-read from the uploaded image (the browser sends at
+most 3024 px, cut to the shelf the person marks). The engine recommends **file**, **ask** or **retake**; a person
+confirms before anything is kept. The fridge lives in the browser tab, drawn in 2D and 3D.
+
+When a shelf is photographed again, **What changed?** (experimental; it failed its pre-set bar, see the report)
+lines the new photo up with the last one using OpenCV 5's learned matching (ALIKED + LightGlue) and marks only what
+may have changed for a second look.
+
+Pages: `/` the front page, `/fridge` the fridge, `/shelf` a single-shelf check with a recorded example.
 
 ![Architecture](docs/architecture/architecture.png)
 
@@ -53,7 +60,8 @@ logs that hold codes and counts only.
 | `service/handler.py` | the Lambda handler: pages, health, recorded example, scan, identify, straighten |
 | `web/fridge.html`, `web/twin.js` | the fridge page: pick, trace, fill; the browser twin and its rules |
 | `web/scene.js`, `web/twin3d.js` | the schematic 3D view (pure geometry; three.js drawing) |
-| `web/index.html` | the single-shelf check: upload, overlays, the list to confirm |
+| `web/home.html` | the front page (`/`): the idea, the steps, the measured results |
+| `web/index.html` | the single-shelf check (`/shelf`): upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |
 
 Docs: [architecture](docs/architecture/), [report (draft)](docs/report.md), [where the code came from](docs/provenance.md).

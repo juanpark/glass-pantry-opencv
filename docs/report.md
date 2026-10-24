@@ -1,4 +1,4 @@
-# Glass Pantry Shelf Check: technical report (DRAFT, 2026-10-24)
+# Glass Pantry: technical report (DRAFT, 2026-10-24)
 
 > Development observations and held-out results are kept apart below. The held-out zoom results were measured with
 > count re-reads on; the current label-only configuration has not been evaluated on a fresh held-out set. Numbers
@@ -153,7 +153,8 @@ file's SHA-1 and deletes a mismatch. They run on CPU; ALIKED's input is fixed at
   Function URL in us-east-1, deployed with SAM by GitHub Actions on qualifying pushes to `main` (documentation-only
   pushes do not deploy) or manual dispatch. CI signs in with GitHub OIDC; no long-lived AWS deployment keys. Each
   deploy runs the tests first, smoke-tests the endpoint, and runs four negative-permission probes on the deploy role.
-- **Endpoint:** `/fridge` (this page), `/` (single-shelf check), `/health` (live/paused, engine version).
+- **Endpoint:** `/` (front page: the idea, the steps, the measured results), `/fridge` (this page), `/shelf`
+  (single-shelf check with the recorded example), `/health` (live/paused, engine version).
 - **Guards:**
   - the owner's on/off switch and the Anthropic API key in SSM Parameter Store;
   - a shared cap of 40 admissions per UTC day in DynamoDB (an atomic conditional update; fails closed). This is a
