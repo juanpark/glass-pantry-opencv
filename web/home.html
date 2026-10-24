@@ -55,10 +55,10 @@ footer{font-size:.84rem}
 
   <section class="card" id="hero" hidden>
     <p class="say" id="heroSay"></p>
+    <p>Between these two photos one pack was taken out and one tub moved. OpenCV flagged 6 things as possibly
+      changed: those 2, and 4 false alarms, each only a question to you. 7 of the 14 needed no AI read.</p>
     <canvas id="heroCv" aria-label="The last photo of a shelf above a new one, with lines joining the points OpenCV found in both"></canvas>
-    <p class="muted" style="font-size:.84rem">A real pair from our fridge, run through this engine. Between the photos one
-      pack was taken out and one tub moved; the other amber boxes are false alarms of the kind we measured, and each is
-      only a question to you. Each line joins a point
+    <p class="muted" style="font-size:.84rem">A real pair from our fridge, run through this engine (whole photos). Each line joins a point
       OpenCV&nbsp;5 found in both photos (ALIKED + LightGlue). Green: still there. Amber: not seen where it was, so you are
       asked. Blue dashed: looks new.</p>
   </section>
@@ -76,8 +76,8 @@ footer{font-size:.84rem}
       <li><b>Photograph each shelf.</b> Claude lists what is on it; OpenCV checks the photo and has small labels read again
         up close. You confirm, and the shelf appears in a 3D fridge.</li>
       <li><b>Photograph it again later.</b> OpenCV lines the new photo up with the last one and checks each thing, with no
-        AI. It marks possible changes and new spots; you may ask Claude to read just those. Things that only moved keep
-        their reading. Nothing leaves the shelf unless you say so, and then it moves to Unplaced, never deleted.</li>
+        AI. It marks possible changes and new spots; you may ask Claude to read just those. Things OpenCV finds only
+        moved keep their reading. Nothing leaves the shelf unless you say so, and then it moves to Unplaced, never deleted.</li>
     </ol>
   </section>
 
@@ -86,7 +86,8 @@ footer{font-size:.84rem}
     <ul class="res">
       <li><b>Photograph it again</b>, 6 before/after pairs: every removal, the move and the addition were found, but it
         <span class="fail">failed</span> its bar on false alarms (8 unchanged things asked about; classic SIFT: 38). So it
-        is marked experimental. The page compares one shelf strip; that setup was not part of the test.</li>
+        is marked experimental. 56 of 71 things were marked no visible change and not read again (SIFT: 27). The page
+        compares one shelf strip; that setup was not part of the test.</li>
       <li><b>Second looks at small labels:</b> no wrong first reading to catch in 28; no accuracy gain claimed.</li>
       <li><b>Speed on AWS</b>, OpenCV comparing one recorded pair (a spot check): 4.4 s, 9.0 s on the first call.</li>
     </ul>
