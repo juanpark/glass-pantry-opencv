@@ -152,7 +152,8 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
     <ul class="items" id="fillHave"></ul>
     <div class="row">
       <label class="btn primary" id="fillPickLabel" aria-disabled="true">Photograph it<input type="file" id="fillPick" accept="image/*" disabled></label>
-      <span id="fillBusy" class="row muted" hidden><span class="spinner"></span><span>Reading the photo, about 40 seconds…</span></span>
+      <label class="btn" id="rescanPickLabel" hidden>What changed? (experimental)<input type="file" id="rescanPick" accept="image/*"></label>
+      <span id="fillBusy" class="row muted" hidden><span class="spinner"></span><span id="fillBusyText">Reading the photo, about 40 seconds…</span></span>
     </div>
     <div id="fillNote" class="note" hidden></div>
     <div class="stage" id="fillStage" hidden><canvas id="fillCv"></canvas></div>
@@ -162,6 +163,24 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
         <tbody id="fillRows"></tbody>
       </table></div>
       <div class="row"><button class="primary" id="fillOk" type="button">Put these here</button></div>
+    </div>
+    <div id="rescanBox" hidden>
+      <p class="note ask" style="font-size:.85rem"><b>Experimental.</b> OpenCV 5 lines this photo up with the last one
+        (ALIKED + LightGlue) and checks each thing on its own. On our six test pairs the annotated removals, arrivals
+        and the move were covered; the two unchanged shelves had no false item flags but 2 and 1 false "new" spots,
+        and two other pairs had 3 and 4 false flags, over the limit we set, so this stays experimental. Every flag is
+        a question: nothing leaves this shelf unless you say so.</p>
+      <ul class="items" id="rescanQs"></ul>
+      <div id="rescanNewBox" hidden>
+        <h2 style="font-size:.95rem">Read in the marked spots</h2>
+        <p class="muted" style="font-size:.85rem">Tick what is new on this shelf. Things already here are left out.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Keep</th><th>What it looks like</th><th>Label</th><th>Count</th></tr></thead>
+          <tbody id="rescanNew"></tbody>
+        </table></div>
+      </div>
+      <div class="row"><button id="rescanRead" type="button" hidden>Read the marked spots with the AI</button>
+        <button class="primary" id="rescanOk" type="button">Apply</button></div>
     </div>
   </section>
 </main>
@@ -244,7 +263,8 @@ async function init(){
 }
 function gate(){
   const on = $("#consent").checked;
-  for(const id of ["tracePick", "fillPick", "identifyPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+  for(const id of ["tracePick", "fillPick", "identifyPick", "rescanPick"]){ $("#" + id).disabled = !on; $("#" + id + "Label").setAttribute("aria-disabled", String(!on)); }
+  $("#rescanRead").disabled = !on;
 }
 
 function selectModel(key){  // every way of choosing a fridge (the list, an identify suggestion) withdraws an open question
@@ -677,8 +697,9 @@ function openFill(id){
   $("#fillTitle").textContent = `Fill: ${holderName(id)}`;
   const ul = $("#fillHave"); ul.innerHTML = "";
   for(const it of twin.items[id] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : it.count === null ? " (count unknown)" : ""}`; ul.append(li); }
-  for(const s of ["#fillNote", "#fillStage", "#fillList"]) $(s).hidden = true;
+  for(const s of ["#fillNote", "#fillStage", "#fillList", "#rescanBox"]) $(s).hidden = true;
   $("#fillBusy").hidden = true;
+  $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(id)).length;
   $("#fillCard").scrollIntoView({behavior:"smooth", block:"start"});
 }
 $("#fillClose").onclick = () => { fill = null; ops.start("fill"); $("#fillCard").hidden = true; };
@@ -698,7 +719,7 @@ $("#fillPick").addEventListener("change", async e => {
     const body = await r.json();
     if(!fillLive(my)) return;
     if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
-    fill.res = body;
+    fill.res = body; fill.blob = blob;
     showScan(body, URL.createObjectURL(blob), my);
   }catch(err){ if(fillLive(my)) fillNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
   finally{ if(fillLive(my)) $("#fillBusy").hidden = true; }
@@ -777,7 +798,7 @@ $("#fillOk").onclick = () => {
     tr.children[3].querySelector("input").style.borderColor = c.ok ? "" : "var(--bad)";
     if(!c.ok){ bad.push(tr); continue; }
     add.push({appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
-              count:c.value, source, at:Date.now(), ...placement(tr.dataset.id)});
+              count:c.value, source, at:Date.now(), pid:`${source}:${tr.dataset.id}`, ...placement(tr.dataset.id)});
   }
   if(bad.length){ fillNote("A count must be a whole number of 1 or more, or left blank if you are not sure.", "bad"); return; }
   const r = T.addItems(twin, fill.ticket, add);  // same fridge, same holder, same layout as when the photo was chosen
@@ -787,10 +808,158 @@ $("#fillOk").onclick = () => {
   }
   if(!commit(r.next, fillNote)) return;
   fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
+  const fr = (fill.res.trace || []).find(s => s.step === "frames");
+  const boxes = ((fill.res.proposal || {}).items || []).map(it => ({pid:`${source}:${it.id}`, box:it.box}));
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.blob, fr.size, boxes.filter(b => add.some(a => a.pid === b.pid)));
   $("#fillList").hidden = true; fill.res = null;
   openFillKeep();
   render();
 };
+// ---------- rescan (experimental): what changed since the last photo of this holder ----------
+// The last photo (reduced) and where each thing stood in it are kept beside the twin (T.RESCAN_KEY). POST /rescan
+// lines the new photo up with it in OpenCV 5; only the changed spots and new regions are read by the model.
+const REC_LONG = 1568;  // the size the engine measures at (frames.LONG), so the page runs what was tested
+function rescanAll(){ try{ return JSON.parse(store().getItem(T.RESCAN_KEY) || "{}") || {}; }catch{ return {}; } }
+function rescanRec(level){ const r = rescanAll()[level]; return r && r.twin === twin.id ? r : null; }
+const recGen = {};  // per holder: only the newest confirmed photo may become its record
+async function saveRescan(owner, blob, size, items){  // best effort: without it, only "Photograph it" is offered
+  const level = owner.level, gen = recGen[level] = (recGen[level] || 0) + 1;  // taken before any await
+  try{
+    const small = await shrink(blob, REC_LONG);
+    const img = await loadImg(URL.createObjectURL(small));
+    const k = img.naturalWidth / size[0];
+    const rec = {twin:owner.twin, level, rev:owner.rev, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
+                 items:items.filter(i => Array.isArray(i.box)).map(i => ({pid:i.pid, box:i.box.map(v => v * k)}))};
+    // a fridge switch, a re-trace or a newer confirmed photo while this one was prepared: this one is not kept
+    if(recGen[level] !== gen || !T.ownerStill(twin, owner)) return;
+    const all = rescanAll(); all[level] = rec;
+    store().setItem(T.RESCAN_KEY, JSON.stringify(all));
+  }catch{ /* storage full or refused: the shelf can still be photographed in full */ }
+  if(fill && fill.level === level && twin) $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(level)).length;
+}
+const RESCAN_SAY = {retake:"Take a new photo: it failed the quality check, so no model was called.",
+  full_read:"These two photos could not be lined up (a different view, or too little in common). Use Photograph it for a full reading.",
+  file:"No change found among the things compared. Things this page does not track, and additions OpenCV missed, are not ruled out. No model was called."};
+const CONSENT = "Tick “I understand and want to send photos” at the top first.";
+$("#rescanPick").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
+  if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
+  const ctx = fill, my = ctx.op = ops.start("fill");  // a newer pick, a close or another holder makes this one stale
+  const rec = rescanRec(ctx.level), items = T.rescanItems(twin, rec);
+  if(!items.length) return;
+  ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
+  let blob;
+  try{ blob = await shrink(f); }
+  catch(err){ if(fill === ctx && ops.live(my)) fillNote(err.message === "decode" ? UNREADABLE : "This photo could not be opened.", "bad"); return; }
+  if(fill !== ctx || !ops.live(my)) return;
+  ctx.rescan = {blob, rec, items, res:null};
+  sendRescan(ctx, my, false);  // OpenCV only first: questions and marked spots, no model call
+});
+$("#rescanRead").onclick = () => { if(fill && fill.rescan) sendRescan(fill, fill.op = ops.start("fill"), true); };
+async function sendRescan(ctx, my, read){
+  const rs = ctx.rescan, live = () => fill === ctx && ops.live(my);
+  if(!live()) return;
+  if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
+  fillNote(""); for(const s of ["#fillList", "#fillStage", "#rescanBox"]) $(s).hidden = true;
+  $("#fillBusyText").textContent = read ? "Reading the marked spots…" : "Comparing with the last photo…"; $("#fillBusy").hidden = false;
+  try{
+    const photo = await b64(rs.blob);
+    if(!live() || !$("#consent").checked) return;  // checked again right before the upload
+    const r = await fetch("rescan", {method:"POST", headers:{"content-type":"application/json"},
+      body:JSON.stringify({old:rs.rec.photo, photo, items:rs.items.map(i => ({id:i.pid, box:i.box})), read})});
+    const body = await r.json();
+    if(!live()) return;
+    if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
+    rs.res = body;
+    showRescan(body, URL.createObjectURL(rs.blob), my, read);
+  }catch{ if(live()) fillNote("The photo could not be sent. Check the connection and try again.", "bad"); }
+  finally{ if(live()){ $("#fillBusy").hidden = true; $("#fillBusyText").textContent = "Reading the photo, about 40 seconds…"; } }
+}
+function nameOf(pid){ const it = (twin.items[fill.level] || []).find(i => i.pid === pid); return it ? (it.label || it.appearance || "a thing") : "a thing"; }
+const RESCAN_COLOUR = {no_visible_change:"#2e8b57", possible_change:"#c0392b", moved:"#9b59b6", cannot_compare:"#8a948e"};
+function showRescan(res, url, my, read){
+  const fr = (res.trace || []).find(s => s.step === "frames");
+  const movedN = (res.items || []).filter(o => o.outcome === "moved").length;
+  if(RESCAN_SAY[res.action]){ fillNote(RESCAN_SAY[res.action] + (res.action === "file" && movedN ? ` ${movedN} thing(s) moved on this shelf and stay here.` : ""), res.action === "file" ? "ok" : "bad"); }
+  else fillNote("Something changed. Please answer below.", "ask");
+  const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = new Image();
+  img.onload = () => {
+    if(!fillLive(my)) return;
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+    const k = fr ? img.naturalWidth / fr.size[0] : 1, lw = Math.max(3, cv.width / 300);
+    ctx.lineWidth = lw;
+    for(const o of res.items || []){ if(!o.box_now) continue; const b = o.box_now;
+      ctx.strokeStyle = RESCAN_COLOUR[o.outcome] || "#888"; ctx.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k); }
+    ctx.setLineDash([lw * 3, lw * 2]); ctx.strokeStyle = "#2f6fb3";
+    for(const n of res.new || []){ const b = n.rect; ctx.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k); }
+    ctx.setLineDash([]);
+    $("#fillStage").hidden = false;
+  };
+  img.src = url;
+  if(res.action === "retake" || res.action === "full_read") return;
+  const ul = $("#rescanQs"); ul.innerHTML = "";
+  for(const o of res.items || []){
+    if(o.outcome === "no_visible_change") continue;
+    const li = document.createElement("li"); li.dataset.pid = o.id; li.dataset.outcome = o.outcome;
+    const name = nameOf(o.id);
+    if(o.outcome === "moved"){ li.textContent = `Moved on this shelf: ${name}. It stays here.`; ul.append(li); continue; }
+    const q = o.outcome === "possible_change" ? `Not seen where it was: ${name}.` : `Could not check: ${name}.`;
+    li.innerHTML = `<div class="row" style="gap:8px"><span></span><label><input type="radio" checked> Still here</label><label><input type="radio"> Not here any more</label></div>`;
+    li.querySelector("span").textContent = q;
+    const [keep, gone] = li.querySelectorAll("input"); keep.name = gone.name = "rq-" + o.id;
+    ul.append(li);
+  }
+  const still = (res.items || []).filter(o => o.outcome === "no_visible_change").length;
+  if(still){ const li = document.createElement("li"); li.className = "muted"; li.textContent = `${still} thing(s) still where they were, not read again.`; ul.prepend(li); }
+  const tb = $("#rescanNew"); tb.innerHTML = "";
+  const unread = (res.new || []).filter(n => n.items === null);
+  $("#rescanRead").hidden = read || !unread.length;
+  $("#rescanRead").textContent = `Read the ${unread.length} marked spot(s) with the AI`;
+  if(unread.length && !read){ const tr = document.createElement("tr"); tr.innerHTML = `<td></td><td colspan="3" class="muted"></td>`;
+    tr.children[1].textContent = `${unread.length} spot(s) look different (dashed boxes). They have not been read. Tap "Read the marked spots" below to have the AI look at just those spots.`; tb.append(tr); }
+  else if(unread.length){ const tr = document.createElement("tr"); tr.innerHTML = `<td></td><td colspan="3" class="muted"></td>`;
+    tr.children[1].textContent = `${unread.length} marked spot(s) were not read` + (unread.some(n => n.unread === "daily_limit")
+      ? ": today's live readings are used up." : ". Use Photograph it for a full reading."); tb.append(tr); }
+  for(const n of res.new || []){
+    if(n.items === null) continue;
+    for(const it of n.items){
+      const tr = document.createElement("tr"); tr.dataset.id = it.id; tr.dataset.appearance = it.appearance || "";
+      tr.dataset.box = JSON.stringify(it.box || null);
+      tr.innerHTML = `<td><input type="checkbox" aria-label="Keep"></td><td></td><td><input></td><td class="q"><input inputmode="numeric"></td>`;
+      tr.children[1].textContent = it.appearance || ""; tr.children[2].querySelector("input").value = it.label ?? "";
+      tr.children[3].querySelector("input").value = it.quantity ?? "";
+      tb.append(tr);
+    }
+  }
+  $("#rescanNewBox").hidden = !tb.children.length;
+  $("#rescanBox").hidden = false;
+}
+$("#rescanOk").onclick = () => {
+  if(!fill || !fill.rescan || !fill.rescan.res || !ops.live(fill.op)) return;
+  const res = fill.rescan.res, fr = (res.trace || []).find(s => s.step === "frames");
+  const source = fr ? fr.source : "rescan";
+  const gone = [...document.querySelectorAll("#rescanQs li[data-pid]")].filter(li => li.querySelectorAll("input")[1]?.checked).map(li => li.dataset.pid);
+  const add = [], bad = [];
+  for(const tr of document.querySelectorAll("#rescanNew tr[data-id]")){
+    if(!tr.children[0].querySelector("input").checked) continue;
+    const c = T.parseCount(tr.children[3].querySelector("input").value);
+    if(!c.ok){ bad.push(tr); continue; }
+    add.push({appearance:tr.dataset.appearance, label:tr.children[2].querySelector("input").value.trim() || null,
+              count:c.value, source, at:Date.now(), pid:`${source}:${tr.dataset.id}`, box:JSON.parse(tr.dataset.box)});
+  }
+  if(bad.length){ fillNote("A count must be a whole number of 1 or more, or left blank if you are not sure.", "bad"); return; }
+  let next = twin;
+  if(gone.length){ const r = T.unplaceItems(next, fill.ticket, gone); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
+  if(add.length){ const r = T.addItems(next, fill.ticket, add.map(({box, ...a}) => a)); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
+  if((gone.length || add.length) && !commit(next, fillNote)) return;
+  // the new photo becomes the one the next rescan compares with: things still here, where they stand now
+  const keep = (res.items || []).filter(o => !gone.includes(o.id) && o.box_now).map(o => ({pid:o.id, box:o.box_now}));
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))]);
+  fillNote(`Done: ${gone.length} moved to Unplaced, ${add.length} added. Nothing else changed.`, "ok");
+  $("#rescanBox").hidden = true; fill.rescan = null;
+  openFillKeep(); render();
+};
+
 function openFillKeep(){ const ul = $("#fillHave"); ul.innerHTML = "";
   for(const it of twin.items[fill.level] || []){ const li = document.createElement("li"); li.textContent = `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`; ul.append(li); } }
 

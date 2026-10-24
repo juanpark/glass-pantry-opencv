@@ -1,3 +1,4 @@
+import pytest
 import cv2
 import numpy as np
 
@@ -16,6 +17,14 @@ def reshoot(img, dx=40, dy=-25, rot=2.0, scale=1.03, light=1.12):
     M[:, 2] += (dx, dy)
     out = cv2.warpAffine(img, M, (w, h), borderMode=cv2.BORDER_REFLECT)
     return cv2.convertScaleAbs(out, alpha=light, beta=5), np.vstack([M, [0, 0, 1]])
+
+
+def add_object(img, x0, y0, x1, y1, seed=42):
+    """Something new on the shelf: a textured thing (a label, edges), as real items are. A flat colour block has
+    no keypoints, so no matcher could see it, and no real product looks like that."""
+    patch = shelf(seed=seed)[200:200 + (y1 - y0), 300:300 + (x1 - x0)]
+    img[y0:y1, x0:x1] = patch
+    cv2.rectangle(img, (x0, y0), (x1 - 1, y1 - 1), (20, 20, 20), 4)
 
 
 ITEMS = [{"id": "a", "box": [300, 420, 460, 640]}, {"id": "b", "box": [900, 760, 1060, 980]}]
@@ -80,3 +89,101 @@ def test_something_new_outside_the_old_boxes_is_not_called_no_change():
     assert al.ok
     r = change.compare(old, [{"id": "a", "box": [300, 420, 460, 640]}], new, al)
     assert r["outcome"] == change.OLD_ITEMS_SAME  # only the compared item is vouched for, never the whole shelf
+
+
+# OpenCV 5 learned matching (ALIKED + LightGlue); the models are fetched by tools/fetch_models.py
+
+
+def test_learned_matching_aligns_an_unchanged_reshoot():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    al = change.align(old, new, method="learned")
+    assert al.ok and al.method == "learned" and al.inliers >= change.MIN_INLIERS, al
+    r = change.compare(old, ITEMS, new, al)
+    assert r["outcome"] == change.OLD_ITEMS_SAME, r
+
+
+def test_learned_matching_cannot_compare_a_different_shelf():
+    al = change.align(rng_shelf(seed=3), rng_shelf(seed=11), method="learned")
+    assert not al.ok, al
+
+
+def test_sift_is_still_available_and_named():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    assert change.align(old, new, method="sift").method == "sift"
+
+
+def test_something_new_is_found_where_it_was_added():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    add_object(new, 1150, 140, 1400, 260)
+    al = change.align(old, new, method="learned")
+    regions = change.new_regions(old, ITEMS, new, al)
+    hits = [b for b in regions if b[0] < 1400 and b[2] > 1150 and b[1] < 260 and b[3] > 140]
+    assert len(hits) == 1 and len(regions) == 1, regions
+
+
+def test_an_unchanged_reshoot_has_nothing_new():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    assert change.new_regions(old, ITEMS, new, change.align(old, new, method="learned")) == []
+
+
+def test_a_removed_item_is_not_also_reported_as_something_new():
+    old = rng_shelf()
+    new, M = reshoot(old)
+    pts = cv2.transform(np.float32([[[900, 760]], [[1060, 980]]]), M[:2]).reshape(-1, 2).astype(int)
+    (x0, y0), (x1, y1) = pts.min(0), pts.max(0)
+    new[y0:y1, x0:x1] = cv2.convertScaleAbs(rng_shelf(seed=99)[y0:y1, x0:x1], alpha=1.12, beta=5)
+    assert change.new_regions(old, ITEMS, new, change.align(old, new, method="learned")) == []
+
+
+def test_no_new_regions_without_an_alignment():
+    old, other = rng_shelf(seed=3), rng_shelf(seed=11)
+    assert change.new_regions(old, ITEMS, other, change.align(old, other)) == []
+
+
+def test_a_moved_item_is_found_at_its_new_place():
+    old = rng_shelf()
+    item = old[760:980, 900:1060].copy()
+    new = old.copy()
+    new[760:980, 900:1060] = rng_shelf(seed=99)[760:980, 900:1060]
+    new[200:420, 1300:1460] = item
+    new, _ = reshoot(new)
+    al = change.align(old, new, method="learned")
+    r = change.compare(old, ITEMS, new, al)
+    by = {o["id"]: o for o in r["items"]}
+    assert by["b"]["outcome"] in (change.MOVED, change.CHANGED) and by["a"]["outcome"] == change.SAME, r
+    if by["b"]["outcome"] == change.MOVED:
+        x0, y0, x1, y1 = by["b"]["box_now"]
+        assert x0 > 1100 and y1 < 600, by["b"]  # near where it was put, not where it was
+
+
+@pytest.mark.parametrize("turn", [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE])
+def test_a_reshoot_with_the_phone_turned_a_quarter_still_aligns_in_the_given_frame(turn):
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    turned = cv2.rotate(new, turn)
+    al = change.align(old, turned, method="learned")
+    assert al.ok, al
+    r = change.compare(old, ITEMS, turned, al)
+    assert r["outcome"] == change.OLD_ITEMS_SAME, r
+    a = next(o for o in r["items"] if o["id"] == "a")
+    x0, y0, x1, y1 = a["box_now"]
+    assert x1 <= turned.shape[1] and y1 <= turned.shape[0]  # boxes are in the turned photo's own pixels
+    assert change.new_regions(old, ITEMS, turned, al) == []
+
+
+def test_an_item_whose_own_matches_put_it_partly_outside_the_photo_cannot_be_compared():
+    """Codex R1 #4: the shelf-wide fit says the box is in view, but the item's own matched points move it partly out
+    of the photo; that is not 'no visible change'."""
+    img = np.full((600, 1000, 3), 128, np.uint8)
+    rng = np.random.default_rng(1)
+    bg_old = rng.uniform(0, 1000, (200, 2)).astype(np.float32) * [1, 0.6]
+    item_old = np.float32([[800 + 190 * a, 250 + 200 * b] for a, b in rng.uniform(0.1, 0.9, (12, 2))])
+    m_old = np.vstack([bg_old, item_old])
+    m_new = np.vstack([bg_old, item_old + [70, 0]])  # background still; the item's points moved 70 px right
+    al = change.Alignment(True, np.eye(3).tolist(), 200, 1.0, 1.0, "", "learned", m_old, m_new, m_old, m_new)
+    r = change.compare(img, [{"id": "edge", "box": [800, 250, 990, 450]}], img, al)
+    assert r["items"][0]["outcome"] == change.CANNOT, r

@@ -116,6 +116,54 @@ def identify_photo(jpeg: bytes, key: str, deadline: float | None = None) -> dict
             "model_calls": 1, "cost_usd": r["cost"], "mode": "LIVE"}
 
 
+MAX_ITEMS = 80
+
+
+def _items(v) -> list[dict] | None:
+    """Old items as the page sends them: [{id, box}] in the old photo's pixels. None for anything else."""
+    import math
+    if not isinstance(v, list) or len(v) > MAX_ITEMS:
+        return None
+    out = []
+    for it in v:
+        if not isinstance(it, dict) or not isinstance(it.get("id"), str) or not 0 < len(it["id"]) <= 40:
+            return None
+        b = it.get("box")
+        if (not isinstance(b, list) or len(b) != 4 or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in b)
+                or b[2] <= b[0] or b[3] <= b[1]):
+            return None
+        out.append({"id": it["id"], "box": [float(x) for x in b]})
+    return out
+
+
+def rescan_photos(old: bytes, items: list[dict], new: bytes, key, admitter, deadline: float | None = None,
+                  read: bool = True) -> dict:
+    """OpenCV first (no model call, not counted); only when something new needs reading is one admission taken,
+    which covers at most rescan.MAX_READS crop reads."""
+    from verifier import claude, rescan
+
+    class Admitted:
+        calls, cost, admitted = 0, 0.0, False
+
+        def propose(self, jpeg):
+            if not Admitted.admitted:
+                try:
+                    ok = admitter()
+                except Exception:  # the counter cannot be read: fail closed
+                    raise rescan.NotAdmitted("limit_unavailable")
+                if not ok:
+                    raise rescan.NotAdmitted("daily_limit")
+                Admitted.admitted = True
+            p = claude.ClaudeProposer(key(), deadline).propose(jpeg)
+            Admitted.calls += 1
+            Admitted.cost += p.raw.get("cost", 0)
+            return p
+
+    res = rescan.run(old, items, new, Admitted(), max_reads=rescan.MAX_READS if read else 0)
+    res.update(mode="LIVE", model_calls=Admitted.calls, cost_usd=round(Admitted.cost, 4), counted=Admitted.admitted)
+    return res
+
+
 RETAKE = {"blurry": "The photo is blurry. Hold the phone still, tap to focus on the sticker, and try again.",
           "shake": "The photo is smeared by movement. Hold the phone still and try again."}
 
@@ -245,8 +293,36 @@ def straighten(event, is_enabled, context=None) -> dict:
                        "targets": targets, "size": [w, h], "source": source})
 
 
+def rescan_route(event, context, is_enabled, admitter, key, rescanner) -> dict:
+    t0 = time.time()
+    if not is_enabled():
+        _log(route="rescan", result="paused")
+        return _resp(503, {"error": "paused", "message": "Live scans are switched off. Try the recorded sample."})
+    if len(event.get("body") or "") > MAX_BYTES * 4 // 3 + 1024:
+        return _resp(413, {"error": "too_large", "message": "Photos too large; the page shrinks photos before sending."})
+    try:
+        raw = event.get("body") or ""
+        req = json.loads(base64.b64decode(raw) if event.get("isBase64Encoded") else raw)
+        old, new, items = base64.b64decode(req["old"]), base64.b64decode(req["photo"]), _items(req.get("items"))
+        read = req.get("read", True) is True  # false: OpenCV only, no model call and nothing counted
+    except Exception:
+        return _resp(400, {"error": "bad_request"})
+    from verifier.frames import decode
+    if items is None or decode(new) is None:
+        return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
+    deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None
+    try:
+        res = rescanner(old, items, new, key, admitter, deadline=deadline, read=read)
+    except Exception as e:  # never echo model text or photo data
+        _log(route="rescan", result="error", kind=type(e).__name__, ms=round((time.time() - t0) * 1000))
+        return _resp(502, {"error": "model_unavailable"})
+    _log(route="rescan", result=res["action"], why=len(res["why"]), calls=res.get("model_calls"),
+         counted=res.get("counted"), cost=res.get("cost_usd"), ms=round((time.time() - t0) * 1000))
+    return _resp(200, res)
+
+
 def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key,
-            identifier=identify_photo):
+            identifier=identify_photo, rescanner=rescan_photos):
     http = (event.get("requestContext") or {}).get("http") or {}
     method, path = http.get("method", "GET"), event.get("rawPath", "/")
     if method == "GET" and path == "/":
@@ -297,6 +373,8 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
     if method == "GET" and path == "/layouts.json":
         return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
                      "application/json; charset=utf-8")
+    if method == "POST" and path == "/rescan":
+        return rescan_route(event, context, is_enabled, admitter, key, rescanner)
     if method == "POST" and path == "/straighten":
         try:
             return straighten(event, is_enabled, context)
