@@ -325,8 +325,9 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
             identifier=identify_photo, rescanner=rescan_photos):
     http = (event.get("requestContext") or {}).get("http") or {}
     method, path = http.get("method", "GET"), event.get("rawPath", "/")
-    if method == "GET" and path == "/":
-        return _resp(200, (ROOT / "web" / "index.html").read_text(encoding="utf-8"), "text/html; charset=utf-8")
+    if method == "GET" and path in ("/", "/shelf"):  # the front door; the single-shelf check
+        page = "home.html" if path == "/" else "index.html"
+        return _resp(200, (ROOT / "web" / page).read_text(encoding="utf-8"), "text/html; charset=utf-8")
     if method == "GET" and path == "/health":
         from verifier import prompt
         return _resp(200, {"ok": True, "live": is_enabled(), "engine": ENGINE, "prompt": prompt.VERSION,

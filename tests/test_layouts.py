@@ -48,3 +48,11 @@ def test_the_twin_module_is_served_as_javascript():
     from service import handler as h
     r = h.handler({"rawPath": "/twin.js", "requestContext": {"http": {"method": "GET"}}})
     assert r["statusCode"] == 200 and r["headers"]["content-type"].startswith("text/javascript") and "export function commit" in r["body"]
+
+
+def test_the_front_door_leads_to_the_fridge_and_the_shelf_check():
+    from service import handler as h
+    get = lambda p: h.handler({"rawPath": p, "requestContext": {"http": {"method": "GET"}}})
+    home, shelf = get("/"), get("/shelf")
+    assert home["statusCode"] == 200 and 'href="fridge"' in home["body"] and 'href="shelf"' in home["body"]
+    assert shelf["statusCode"] == 200 and "Glass Pantry Shelf Check" in shelf["body"]
