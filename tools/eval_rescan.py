@@ -45,6 +45,7 @@ def overlaps(a, b) -> bool:
 
 def score(p: dict, r: dict, regions: list, al) -> dict:
     by = {o["id"]: o["outcome"] for o in r["items"]}
+    asked = [o["box_now"] for o in r["items"] if o["outcome"] == change.CHANGED and o.get("box_now")]
     removed = p.get("removed", [])
     added = p.get("added", [])
     stayed = [i for i in by if i not in removed]
@@ -53,7 +54,8 @@ def score(p: dict, r: dict, regions: list, al) -> dict:
         "removed_flagged": sum(by.get(i) in (change.CHANGED, change.CANNOT, change.MOVED) for i in removed),
         "removed": len(removed),
         "false_flags": sum(by[i] in (change.CHANGED, change.MOVED) for i in stayed),
-        "added_found": sum(any(overlaps(a, g) for g in regions) for a in added),
+        # an added thing is found when a new region or a changed item's spot (both are read) covers it
+        "added_found": sum(any(overlaps(a, g) for g in regions + asked) for a in added),
         "added": len(added),
         "false_new": sum(not any(overlaps(g, a) for a in added) for g in regions),
         "rereads_saved": sum(v == change.SAME for v in by.values()),

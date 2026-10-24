@@ -54,7 +54,8 @@ def test_a_changed_item_is_a_question_never_a_deletion():
     new[y0:y1, x0:x1] = cv2.convertScaleAbs(shelf(seed=99)[y0:y1, x0:x1], alpha=1.12, beta=5)
     f = Fake()
     r = rescan.run(_jpeg(old), ITEMS, _jpeg(new), f)
-    assert r["action"] == "ask" and "changed:b" in r["why"] and f.calls == [], r
+    # the changed spot is read once (it may hold something else now); the old item stays, as a question
+    assert r["action"] == "ask" and "changed:b" in r["why"] and len(f.calls) == 1, r
     assert {o["id"] for o in r["items"]} == {"a", "b"}  # every old item is still reported
 
 

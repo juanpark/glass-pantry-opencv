@@ -1,3 +1,4 @@
+import pytest
 import cv2
 import numpy as np
 
@@ -157,3 +158,18 @@ def test_a_moved_item_is_found_at_its_new_place():
     if by["b"]["outcome"] == change.MOVED:
         x0, y0, x1, y1 = by["b"]["box_now"]
         assert x0 > 1100 and y1 < 600, by["b"]  # near where it was put, not where it was
+
+
+@pytest.mark.parametrize("turn", [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE])
+def test_a_reshoot_with_the_phone_turned_a_quarter_still_aligns_in_the_given_frame(turn):
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    turned = cv2.rotate(new, turn)
+    al = change.align(old, turned, method="learned")
+    assert al.ok, al
+    r = change.compare(old, ITEMS, turned, al)
+    assert r["outcome"] == change.OLD_ITEMS_SAME, r
+    a = next(o for o in r["items"] if o["id"] == "a")
+    x0, y0, x1, y1 = a["box_now"]
+    assert x1 <= turned.shape[1] and y1 <= turned.shape[0]  # boxes are in the turned photo's own pixels
+    assert change.new_regions(old, ITEMS, turned, al) == []

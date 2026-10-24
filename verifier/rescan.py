@@ -2,7 +2,7 @@
 
     frames -> gate -> align new onto the last confirmed photo (OpenCV 5 ALIKED + LightGlue, USAC_MAGSAC)
            -> per old item: no visible change / possible change / cannot compare
-           -> something-new regions -> the model reads each region's crop only -> decision
+           -> something-new regions -> the model reads only the crops of changed spots and new regions -> decision
 
 Actions:
     retake     the new photo failed the gate (no model call)
@@ -68,11 +68,14 @@ def run(old_jpeg: bytes, old_items: list[dict], new_jpeg: bytes, proposer, max_r
     if not al.ok:
         return done("full_read", [f"align:{al.why}"], cmp["items"])
     step("compare", outcomes=[(o["id"], o["outcome"]) for o in cmp["items"]])
-    regions = change.new_regions(old, old_items, f.image, al)
+    regions = change.new_regions(old, old_items, f.image, al, cmp["items"])
     step("new_regions", regions=regions)
 
+    # What to read: where an old item looks changed (it may be gone, or something else stands there now), then
+    # each new region. Unchanged and moved items keep their reading and are not read again.
+    spots = [o["box_now"] for o in cmp["items"] if o["outcome"] == change.CHANGED and o.get("box_now")] + regions
     new = []
-    for i, r in enumerate(regions, 1):
+    for i, r in enumerate(spots, 1):
         if i > max_reads:
             new.append({"region": i, "rect": r, "items": None})  # over the cap: shown, not read
             continue
@@ -80,7 +83,7 @@ def run(old_jpeg: bytes, old_items: list[dict], new_jpeg: bytes, proposer, max_r
         try:
             p = proposer.propose(crop)
         except NotAdmitted as e:  # no model call allowed: this and later regions are shown unread
-            new += [{"region": j, "rect": rr, "items": None, "unread": str(e)} for j, rr in enumerate(regions[i - 1:], i)]
+            new += [{"region": j, "rect": rr, "items": None, "unread": str(e)} for j, rr in enumerate(spots[i - 1:], i)]
             step("read_region", region=i, refused=str(e))
             break
         items = []
@@ -94,5 +97,5 @@ def run(old_jpeg: bytes, old_items: list[dict], new_jpeg: bytes, proposer, max_r
 
     why = [f"changed:{o['id']}" for o in cmp["items"] if o["outcome"] == change.CHANGED]
     why += [f"unclear:{o['id']}" for o in cmp["items"] if o["outcome"] == change.CANNOT]
-    why += [f"new:{n['region']}" for n in new]
+    why += [f"new:{n['region']}" for n in new[len(spots) - len(regions):]]
     return done(decide.ASK if why else decide.FILE, why, cmp["items"], new)

@@ -38,7 +38,7 @@ MOVED = "moved"
 # photo-wide warp cannot judge every item; the item's own matched points can).
 MIN_KP = 8  # old keypoints inside a box below this: too plain to judge by matches, gradient correlation decides
 MIN_LOCAL = 6  # matched points agreeing on one local move (RANSAC, similarity) to call the item present
-SUPPORT = 0.15  # ... and at least this share of the box's old keypoints
+SUPPORT = 0.3  # ... and at least this share of the box's own old keypoints
 LOCAL_TOL = 0.02  # RANSAC tolerance, share of the photo's long side
 MOVED_BY = 0.5  # present, but this many box sizes away from where the shelf-wide fit puts it: moved
 GRID = 24  # new_regions: cells across the photo's long side
@@ -102,16 +102,47 @@ def _match_sift(a, b):
     return ka, kb, [m for m, n in (p for p in pairs if len(p) == 2) if m.distance < 0.75 * n.distance]
 
 
+TURNS = (None, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180)
+
+
+def _unturn(pts, turn, w, h):
+    """Points found on the new photo turned by `turn` -> the same points on the photo as given (w x h)."""
+    x, y = pts[:, 0], pts[:, 1]
+    if turn == cv2.ROTATE_90_CLOCKWISE:  # (x, y) was turned to (h-1-y, x)
+        return np.stack([y, h - 1 - x], 1)
+    if turn == cv2.ROTATE_90_COUNTERCLOCKWISE:  # (x, y) was turned to (y, w-1-x)
+        return np.stack([w - 1 - y, x], 1)
+    if turn == cv2.ROTATE_180:
+        return np.stack([w - 1 - x, h - 1 - y], 1)
+    return pts
+
+
 def align(old: np.ndarray, new: np.ndarray, method: str = "learned") -> Alignment:
+    """The phone may be held the other way round for the second photo (portrait vs landscape). LightGlue does not
+    match across a quarter turn, so when the photo as given does not align, the three turns are tried in order and
+    the first that aligns is kept; otherwise the best failure is reported."""
+    best = None
+    for turn in TURNS:
+        al = _align_once(old, new, method, turn)
+        if al.ok:
+            return al
+        if best is None or al.inliers > best.inliers:
+            best = al
+    return best
+
+
+def _align_once(old, new, method, turn) -> Alignment:
     a, sa = _grey_small(old)
-    b, sb = _grey_small(new)
+    b0, sb = _grey_small(new)
+    b = b0 if turn is None else cv2.rotate(b0, turn)
     ka, kb, good = (_match_learned if method == "learned" else _match_sift)(a, b)
     if good is None:
         return Alignment(False, None, 0, 0.0, 0.0, "too_few_features", method)
     if len(good) < MIN_INLIERS:
         return Alignment(False, None, len(good), 0.0, 0.0, "too_few_matches", method)
     pa = np.float32([ka[m.queryIdx].pt for m in good]) / sa
-    pb = np.float32([kb[m.trainIdx].pt for m in good]) / sb
+    bw, bh = b0.shape[1], b0.shape[0]
+    pb = _unturn(np.float32([kb[m.trainIdx].pt for m in good]), turn, bw, bh) / sb
     H, mask = cv2.findHomography(pa, pb, cv2.USAC_MAGSAC, 4.0 / sb, maxIters=5000, confidence=0.999)
     if H is None:
         return Alignment(False, None, 0, 0.0, 0.0, "no_homography", method)
@@ -127,7 +158,8 @@ def align(old: np.ndarray, new: np.ndarray, method: str = "learned") -> Alignmen
     ok = inl >= MIN_INLIERS and ratio >= MIN_INLIER_RATIO and overlap >= MIN_OVERLAP and np.isfinite(H).all()
     why = "" if ok else ("few_inliers" if inl < MIN_INLIERS or ratio < MIN_INLIER_RATIO else "small_overlap")
     return Alignment(bool(ok), H.tolist(), inl, round(ratio, 3), round(min(overlap, 1.0), 3), why, method,
-                     np.float32([k.pt for k in ka]) / sa, np.float32([k.pt for k in kb]) / sb, pa, pb)
+                     np.float32([k.pt for k in ka]) / sa,
+                     _unturn(np.float32([k.pt for k in kb]), turn, bw, bh) / sb, pa, pb)
 
 
 def _grad(img):
@@ -170,8 +202,19 @@ def compare(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignme
     valid = cv2.warpPerspective(np.ones(old.shape[:2], np.uint8), H, (nw, nh))
     ga = gb = None
     tol = LOCAL_TOL * max(nw, nh)
+    area_of = lambda b: (b[2] - b[0]) * (b[3] - b[1])
     out = []
     for it in old_items:
+        # A point belongs to the smallest box that holds it: boxes overlap (a jar in front of a bag), and a big box
+        # must not be kept "present" by the points of the smaller things inside or in front of it.
+        smaller = [o["box"] for o in old_items if o is not it and area_of(o["box"]) < area_of(it["box"])]
+
+        def own(pts, box=it["box"], smaller=smaller):
+            m = _inside(pts, box)
+            for sb in smaller:
+                m &= ~_inside(pts, sb)
+            return m
+
         box = it["box"]
         pts = _project(box, H)
         area = float(abs(cv2.contourArea(pts)))
@@ -183,7 +226,7 @@ def compare(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignme
             out.append({"id": it.get("id"), "outcome": CANNOT, "box_now": None, "why": "partly_out_of_view",
                         "coverage": round(coverage, 3)})
             continue
-        n_kp = int(_inside(al.pts_old, box).sum()) if al.pts_old is not None else 0
+        n_kp = int(own(al.pts_old).sum()) if al.pts_old is not None else 0
         if n_kp < MIN_KP:
             if ga is None:
                 ga, gb = _grad(cv2.warpPerspective(old, H, (nw, nh))), _grad(new)
@@ -191,7 +234,7 @@ def compare(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignme
             verdict = SAME if z >= SAME_ZNCC else CHANGED if z <= CHANGED_ZNCC else CANNOT
             out.append({"id": it.get("id"), "outcome": verdict, "by": "gradient", "zncc": round(z, 3), "box_now": b})
             continue
-        sel = _inside(al.m_old, box)
+        sel = own(al.m_old)
         local, M = 0, None
         if sel.sum() >= 3:
             M, inl = cv2.estimateAffinePartial2D(al.m_old[sel], al.m_new[sel], method=cv2.RANSAC,
