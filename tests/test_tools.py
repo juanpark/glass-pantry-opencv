@@ -238,3 +238,11 @@ def test_the_phone_apps_item_models_are_served_and_nothing_else_under_items():
     assert base64.b64decode(r["body"])[:4] == b"glTF"
     for bad in ("/items/item-nope.glb", "/items/item-../../service/handler.py", "/items/items.glb", "/items/item-A.glb"):
         assert get(bad)["statusCode"] == 404, bad
+
+
+def test_the_fridge_is_kept_on_this_device_and_can_be_forgotten():
+    """Juan 10/24: remember the fridge across visits (this browser only), with a way to forget it."""
+    p = _page()
+    assert "window.localStorage" in p and "sessionStorage" not in p
+    assert 'id="forget"' in p and "T.forget(" in p
+    assert 'addEventListener("storage"' in p  # another tab's save pauses this one instead of overwriting it

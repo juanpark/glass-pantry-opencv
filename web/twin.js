@@ -355,3 +355,8 @@ export function facesOf(records, twinId) {
     return it ? {photo: r.photo, box: it.box} : null;
   };
 }
+
+/** Forget this page's fridge and kept photos on this device (both keys); other sites' and pages' data stay. */
+export function forget(st) {
+  for (const k of [KEY, RESCAN_KEY]) st.removeItem(k);
+}
