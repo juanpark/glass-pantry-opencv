@@ -10,10 +10,12 @@ Nothing about a photo is logged: no image, no crop, no label, no model text. Log
 import base64
 import json
 import os
+import re
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+ITEM_GLB = re.compile(r"/items/item-[a-z0-9_]+\.glb")
 MAX_BYTES = 5_500_000  # Function URL requests stop at 6 MB, base64 included
 DAILY_SCANS = int(os.environ.get("DAILY_SCANS", "40"))
 TABLE = os.environ.get("TABLE", "glass-pantry-opencv-calls")
@@ -371,6 +373,11 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, (ROOT / "web" / "twin.js").read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
     if method == "GET" and path in ("/scene.js", "/twin3d.js", "/compare.js"):
         return _resp(200, (ROOT / "web" / path[1:]).read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
+    if method == "GET" and path == "/items/items.json":
+        return _resp(200, (ROOT / "web" / "items" / "items.json").read_text(encoding="utf-8"), "application/json; charset=utf-8")
+    if method == "GET" and ITEM_GLB.fullmatch(path) and (ROOT / "web" / path[1:]).is_file():  # the phone app's models
+        r = _resp(200, base64.b64encode((ROOT / "web" / path[1:]).read_bytes()).decode(), "model/gltf-binary")
+        return {**r, "headers": {**r["headers"], "cache-control": "public, max-age=86400"}, "isBase64Encoded": True}
     if method == "GET" and path == "/layouts.json":
         return _resp(200, (ROOT / "web" / "layouts" / "layouts.json").read_text(encoding="utf-8"),
                      "application/json; charset=utf-8")

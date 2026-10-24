@@ -221,3 +221,20 @@ def test_a_comparison_still_loading_never_returns_after_apply():
     p = _page()
     show = _body(p, "function showRescan(res, url, my, read){", "\n}")
     assert show.count("live()") >= 2 and "const live = () => fillLive(my) && fill.rescan === rs" in show
+
+
+def test_the_phone_apps_item_models_are_served_and_nothing_else_under_items():
+    """Plan v6: the 3D view draws the app's own models; only exported item files can be fetched."""
+    import base64
+    import json
+    from service import handler as h
+
+    def get(path):
+        return h.handler({"rawPath": path, "requestContext": {"http": {"method": "GET"}}})
+    lib = json.loads(get("/items/items.json")["body"])["items"]
+    assert len(lib) >= 50 and all(len(m) >= 2 for it in lib for m in it["match"])
+    r = get(f"/items/item-{lib[0]['key']}.glb")
+    assert r["statusCode"] == 200 and r["isBase64Encoded"] and r["headers"]["content-type"] == "model/gltf-binary"
+    assert base64.b64decode(r["body"])[:4] == b"glTF"
+    for bad in ("/items/item-nope.glb", "/items/item-../../service/handler.py", "/items/items.glb", "/items/item-A.glb"):
+        assert get(bad)["statusCode"] == 404, bad

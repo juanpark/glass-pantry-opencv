@@ -13,7 +13,19 @@ export const family = v => Object.keys(FAMILIES).find(f => f !== "other" && Stri
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-export function sceneOf(twin, row) {
+/** The library item a reading names, as the phone app picks it (object_catalog.dart specFor): the longest match word
+ * found in the text wins, ties on key; null when nothing matches. */
+export function matchItem(text, lib) {
+  const hay = String(text || "").toLowerCase();
+  let best = null, len = 0;
+  for (const it of lib || []) for (const m of it.match) {
+    if (m.length < 2 || !hay.includes(m.toLowerCase())) continue;
+    if (m.length > len || (m.length === len && it.key < best.key)) { best = it; len = m.length; }
+  }
+  return best;
+}
+
+export function sceneOf(twin, row, lib = null) {
   const [W, H, D] = row.mm;
   const iw = W - 2 * WALL, ih = H - 2 * WALL, id = D - WALL - DOOR_ZONE;
   const at = (fx, fy, fz) => [-iw / 2 + fx * iw, WALL + fy * ih, -D / 2 + WALL + fz * id];
@@ -34,13 +46,21 @@ export function sceneOf(twin, row) {
       const its = twin.items[lid] || [];
       its.forEach((it, i) => {
         const [shape, sw, sh, sd] = FAMILIES[family(it.vessel)];
-        const h = clamp((it.hFrac || 0.45) * lh, Math.min(30, room), room);
-        const w = clamp(it.wFrac ? it.wFrac * cw : h * sw / sh, 25, cw / 2);
-        const d = Math.min(cd - 20, w * sd / sw);
+        const lm = matchItem(`${it.label || ""} ${it.appearance || ""}`, lib);
+        let h = clamp((it.hFrac || 0.45) * lh, Math.min(30, room), room);
+        let w = clamp(it.wFrac ? it.wFrac * cw : h * sw / sh, 25, cw / 2);
+        let d = Math.min(cd - 20, w * sd / sw);
+        if (lm) {  // a library model at its real size, made smaller only if the shelf cannot hold it
+          const k = Math.min(1, room / lm.mm[1], cw / 2 / lm.mm[0], (cd - 20) / lm.mm[2]);
+          [w, h, d] = lm.mm.map(v => v * k);
+        }
         const fx = Number.isFinite(it.xFrac) ? clamp(it.xFrac, 0, 1) : (its.length > 1 ? 0.12 + 0.76 * i / (its.length - 1) : 0.5);
         const cx = clamp(x0 + fx * cw, x0 + w / 2, x1 - w / 2);
-        parts.push({kind: "item", level: lid, pid: it.pid, shape, label: `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`,
-                    box: [cx - w / 2, base, clamp(z0 + cd / 2 + 40 - d / 2, z0, z1 - d), w, h, d]});  // a little forward
+        // depth from where its foot stands in the photo: lower in the shelf strip is nearer the front (approximate)
+        const z = Number.isFinite(it.yFrac) ? z0 + 10 + clamp((it.yFrac - 0.4) / 0.6, 0, 1) * Math.max(0, cd - d - 20)
+          : clamp(z0 + cd / 2 + 40 - d / 2, z0, z1 - d);  // a little forward
+        parts.push({kind: "item", level: lid, pid: it.pid, shape, ...(lm ? {model: lm.key} : {}), label: `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`,
+                    box: [cx - w / 2, base, z, w, h, d]});
       });
     }
   }
