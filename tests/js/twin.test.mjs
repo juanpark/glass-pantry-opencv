@@ -343,3 +343,35 @@ test("moved things take their new place in the twin; other things and other hold
   assert.equal(r.next.items["c/1"][0].hFrac, 0.4);
   assert.equal(r.moved, 1);
 });
+
+test("band steps: a slow older photo never replaces a newer step", async () => {
+  const s = new T.BandSteps(), shown = [];
+  let readyA, cur = "B";
+  const a = s.open(() => new Promise(r => { readyA = r; }), () => cur === "A", st => shown.push(st.id));
+  const b = s.open(async () => ({id: "B"}), () => cur === "B", st => shown.push(st.id));
+  await new Promise(r => setTimeout(r, 0));
+  readyA({id: "A"});
+  assert.equal(await a, null);
+  assert.deepEqual(shown, ["B"]);
+  assert.equal(s.cur.id, "B");
+  assert.ok(s.end("cropB"));
+  assert.equal(await b, "cropB");
+});
+
+test("band steps: a late answer ends only its own step; a stale step's answer is dropped", async () => {
+  const s = new T.BandSteps();
+  let cur = "A";
+  const a = s.open(async () => ({id: "A"}), () => cur === "A", () => {});
+  await new Promise(r => setTimeout(r, 0));
+  const stepA = s.cur;
+  cur = "B";
+  const b = s.open(async () => ({id: "B"}), () => cur === "B", () => {});
+  assert.equal(await a, null);  // replaced
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(s.end("cropA", stepA), false);  // A's crop arrives late: B stays open
+  assert.equal(s.cur.id, "B");
+  cur = "C";  // B's pick went stale (closed, another fridge): its answer is dropped
+  assert.ok(s.end("cropB"));
+  assert.equal(await b, null);
+  assert.equal(s.cur, null);
+});

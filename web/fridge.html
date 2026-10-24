@@ -313,7 +313,7 @@ $("#identifyPick").addEventListener("change", async e => {
 function switchTo(r){  // a new fridge keeps everything the old one(s) held, in Unplaced; pending work is cancelled
   const next = T.replaceModel([twin, stale], r, LAYOUT_SHA);
   if(!commit(next, modelNoteSay)) return;
-  stale = null; ops.cancel(); trace = null; fill = null;
+  stale = null; ops.cancel(); trace = null; fill = null; endBand(null);
   $("#identifyBusy").hidden = true;  // a read still in flight is stale now; its answer is ignored
   $("#traceCard").hidden = true; $("#fillCard").hidden = true; $("#modelNote").hidden = true;
   render();
@@ -467,7 +467,7 @@ const EDGE_NAMES = ["top edge", "right wall", "bottom edge", "left wall"];
 
 function openTrace(comp){
   const c = row(twin.key).compartments.find(c => c.id === comp);
-  trace = {comp, op:ops.start("trace")}; ops.start("fill"); fill = null;
+  trace = {comp, op:ops.start("trace")}; ops.start("fill"); fill = null; endBand(null);
   $("#traceCard").hidden = false; $("#fillCard").hidden = true;
   $("#traceTitle").textContent = `Trace: ${c.name.en}`;
   for(const id of ["#traceNote", "#traceStage", "#traceStep", "#outlineActions", "#lineActions"]) $(id).hidden = true;
@@ -720,7 +720,7 @@ $("#fillPick").addEventListener("change", async e => {
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null;  // the fridge, holder and layout this photo is for
   fillNote(""); $("#fillList").hidden = true; $("#rescanBox").hidden = true;
   try{
-    const pick = await chooseBand(await shrink(f), lastBand(ctx.level), my);
+    const pick = await chooseBand(await shrink(f), lastBand(ctx.level), () => fillLive(my) && fill === ctx);
     if(!pick || !fillLive(my) || fill !== ctx) return;
     if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
     $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
@@ -737,22 +737,20 @@ $("#fillPick").addEventListener("change", async e => {
 // ---------- the shelf band: only the strip between two lines is read and compared ----------
 // A shelf photo usually shows the shelves above and below too. The person drags two lines to this shelf's top and
 // bottom; only that strip (T.bandCrop) goes to the engine, so nothing from another shelf can be read or filed here.
-let band = null;  // {img, blob, lines:[a, b], op, res}
+const bands = new T.BandSteps();  // the open step: {img, lines:[a, b], live, encoding}
 function lastBand(level){ const r = rescanRec(level); return r && Array.isArray(r.band) ? r.band : null; }
-async function chooseBand(blob, preset, my){
-  const img = await loadImg(URL.createObjectURL(blob));
-  if(band) band.res(null);  // an older band step gives way
-  return new Promise(res => {
-    band = {img, blob, lines: preset ? [...preset] : [0.2, 0.8], op: my, res};
+// `live`: is the pick that asked still current (same fill, same operation). Resolves to {blob, band} or null.
+function chooseBand(blob, preset, live){
+  return bands.open(async () => ({img: await loadImg(URL.createObjectURL(blob)), lines: preset ? [...preset] : [0.2, 0.8]}), live, () => {
     $("#bandHelp").textContent = preset ? "The lines are where this shelf was last time. Check them, then read." :
       "Drag the two lines to the top and bottom of this shelf. Only the part between them is read.";
     $("#bandActions").hidden = false; $("#fillStage").hidden = false;
     drawBand();
   });
 }
-function endBand(result){ if(!band) return; const b = band; band = null; $("#bandActions").hidden = true; b.res(result); }
+function endBand(result, step){ if(bands.end(result, step)) $("#bandActions").hidden = true; }
 function drawBand(){
-  const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = band.img;
+  const band = bands.cur, cv = $("#fillCv"), ctx = cv.getContext("2d"), img = band.img;
   cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
   const [a, b] = [...band.lines].sort((x, y) => x - y), H = cv.height, W = cv.width;
   const lw = Math.max(3, W / 250), fs = Math.round(Math.min(W / 32, H / 14));
@@ -770,24 +768,29 @@ function drawBand(){
   const cv = $("#fillCv"); let drag = -1;
   const yAt = e => { const r = cv.getBoundingClientRect(); return (e.clientY - r.top) / r.height; };
   cv.addEventListener("pointerdown", e => {
-    if(!band) return;
+    const band = bands.cur; if(!band || band.encoding) return;
     const r = cv.getBoundingClientRect(), reach = Math.max(0.06, (e.pointerType === "touch" ? FINGER * 1.5 : FINGER) / r.height);
     const y = yAt(e); let d = reach; drag = -1;
     band.lines.forEach((v, i) => { if(Math.abs(v - y) < d){ d = Math.abs(v - y); drag = i; } });
     if(drag >= 0) cv.setPointerCapture(e.pointerId);
   });
-  cv.addEventListener("pointermove", e => { if(!band || drag < 0) return; band.lines[drag] = Math.max(0, Math.min(1, yAt(e))); drawBand(); });
+  cv.addEventListener("pointermove", e => { const band = bands.cur; if(!band || band.encoding || drag < 0) return; band.lines[drag] = Math.max(0, Math.min(1, yAt(e))); drawBand(); });
   const up = () => { drag = -1; }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
 })();
 $("#bandCancel").onclick = () => endBand(null);
 $("#bandOk").onclick = () => {
-  if(!band) return;
+  const band = bands.cur; if(!band || band.encoding) return;
   const img = band.img, r = T.bandCrop(img.naturalWidth, img.naturalHeight, band.lines[0], band.lines[1]);
   if(!r){ fillNote("The two lines are too close together. Move them to the top and bottom of the shelf.", "bad"); return; }
   const c = document.createElement("canvas"); c.width = r.w; c.height = r.h;
   c.getContext("2d").drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
   const lines = [...band.lines].sort((x, y) => x - y);
-  c.toBlob(b => b ? endBand({blob:b, band:lines}) : fillNote("This photo could not be cut. Try again.", "bad"), "image/jpeg", 0.9);
+  band.encoding = true;  // the lines hold still until the crop is made; the crop answers only this step
+  c.toBlob(b => {
+    band.encoding = false;
+    if(bands.cur !== band) return;  // replaced, cancelled or closed meanwhile: dropped
+    if(b) endBand({blob:b, band:lines}, band); else fillNote("This photo could not be cut. Try again.", "bad");
+  }, "image/jpeg", 0.9);
 };
 
 
@@ -915,7 +918,7 @@ $("#rescanPick").addEventListener("change", async e => {
   if(!items.length) return;
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
   let pick;
-  try{ pick = await chooseBand(await shrink(f), rec.band, my); }
+  try{ pick = await chooseBand(await shrink(f), rec.band, () => fill === ctx && ops.live(my)); }
   catch(err){ if(fill === ctx && ops.live(my)) fillNote(err.message === "decode" ? UNREADABLE : "This photo could not be opened.", "bad"); return; }
   if(!pick || fill !== ctx || !ops.live(my)) return;
   ctx.rescan = {blob:pick.blob, band:pick.band, rec, items, res:null};

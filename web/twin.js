@@ -179,6 +179,29 @@ export function bandCrop(w, h, a, b) {
   return {x: 0, y: y0, w, h: y1 - y0};
 }
 
+/** The page's shelf-band steps, one open at a time. A step opens only if the pick that asked for it is still live
+ * once its photo is ready, so a slow older photo never replaces a newer step. An answer (a crop, a cancel) ends only
+ * the step it was made for, so a late crop is never handed to a newer pick, holder or fridge. */
+export class BandSteps {
+  constructor() { this.cur = null; }
+  /** prepare() -> the step's data; live() -> is the pick still current; show(step) draws it. Resolves to the
+   * step's answer, or null when it was replaced, cancelled or went stale. */
+  async open(prepare, live, show) {
+    const data = await prepare();
+    if (!live()) return null;
+    this.end(null);
+    const step = {...data, live};
+    return new Promise(res => { step.res = res; this.cur = step; show(step); });
+  }
+  /** End `step` (default: the open one) with `result`; a stale step's result is dropped. False if not open. */
+  end(result, step = this.cur) {
+    if (!step || this.cur !== step) return false;
+    this.cur = null;
+    step.res(step.live() ? result : null);
+    return true;
+  }
+}
+
 /** A rescan found things moved on the same holder: their place for the 3D view follows (nothing else changes). */
 export function setPlacement(twin, t, byPid) {
   const p = ticketProblem(twin, t);
