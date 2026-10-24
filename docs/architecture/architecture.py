@@ -27,13 +27,13 @@ with Diagram("Glass Pantry: photo to fridge twin", filename="docs/architecture/a
              direction="LR", graph_attr=G, node_attr=N, edge_attr=E):
     person = Mobile("Person\n(phone or computer browser)")
 
-    with Cluster("Browser: your fridge (this tab only)", graph_attr={"bgcolor": "#f6f3fb", "fontname": "Helvetica"}):
+    with Cluster("Browser: your fridge (kept in this browser, on this device)", graph_attr={"bgcolor": "#f6f3fb", "fontname": "Helvetica"}):
         pick = step("A Pick the fridge\n(app catalogue layouts)")
         outline = step("B Outline the opening\n(named corners, edges;\nshelves in perspective)")
-        twin = step("D Fridge twin\nlevels, items, Unplaced")
+        twin = step("D Fridge twin\nlevels, items, Unplaced\n+ last photo of each shelf")
         pick >> twin
 
-    with Cluster("AWS us-east-1", graph_attr={"bgcolor": "#f3f6fb", "fontname": "Helvetica"}):
+    with Cluster("AWS us-east-1: one Lambda container (OpenCV 5 on CPU, 4096 MB)", graph_attr={"bgcolor": "#f3f6fb", "fontname": "Helvetica"}):
         with Cluster("Identify: POST /identify (1 model call)", graph_attr={"bgcolor": "#ffffff"}):
             igate = step("Photo gate\n(OpenCV: blur, shake)")
             iread = step("Model reads the sticker\n(code, maker, kind)")
@@ -50,6 +50,12 @@ with Diagram("Glass Pantry: photo to fridge twin", filename="docs/architecture/a
             decide = step("6 Decide\nfile / ask / retake")
             gate >> Edge(label="sharp") >> read >> planes >> zsel >> zread >> decide
             gate >> Edge(label="blurry: retake,\nno model call", style="dashed") >> decide
+        with Cluster("What changed?: POST /rescan, OpenCV 5 first (experimental)", graph_attr={"bgcolor": "#ffffff"}):
+            rgate = step("1 Photo gate\n(same as fill)")
+            align = step("2 Align to the last photo\n(OpenCV 5: ALIKED + LightGlue,\nMAGSAC homography)")
+            judge = step("3 Each known thing:\nstill there / moved /\nnot seen / can't compare\n+ spots that look new")
+            rread = step("4 Read marked spots\nonly if the person asks\n(at most 6 crops)")
+            rgate >> Edge(label="sharp") >> align >> judge >> Edge(label="person asks", style="dashed") >> rread
         counter = Dynamodb("Daily scan\ncounter")
         params = SystemsManagerParameterStore("On/off switch\n+ API key")
         logs = CloudwatchLogs("Logs\n(codes, counts only)")
@@ -69,6 +75,9 @@ with Diagram("Glass Pantry: photo to fridge twin", filename="docs/architecture/a
     warp >> Edge(label="person drags lines,\nconfirms", color="#1f6f5c") >> twin
     person >> Edge(label="shelf photo") >> gate
     decide >> Edge(label="person confirms list", color="#1f6f5c") >> twin
+    person >> Edge(label="same shelf again\n+ the kept last photo") >> rgate
+    judge >> Edge(label="questions, no model call;\nperson answers, gone → Unplaced", color="#1f6f5c") >> twin
+    rread >> Edge(label="1 admission") >> claude
     params >> Edge(style="dotted") >> gate
     counter >> Edge(label="admit", style="dotted") >> gate
     read >> Edge(label="1 call") >> claude

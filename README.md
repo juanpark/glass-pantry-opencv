@@ -5,7 +5,8 @@ fridge from its model sticker, trace each compartment over a photo, then photogr
 model (Claude) lists what it sees. OpenCV 5 gates the photo, checks the model's shelf lines against real edges,
 straightens traced openings, and selects small labels for a re-read from the uploaded image (the browser sends at
 most 3024 px, cut to the shelf the person marks). The engine recommends **file**, **ask** or **retake**; a person
-confirms before anything is kept. The fridge lives in the browser tab, drawn in 2D and 3D.
+confirms before anything is kept. The fridge lives in this browser on this device (never on the server), drawn in
+2D and in 3D with the phone app's own item models.
 
 When a shelf is photographed again, **What changed?** (experimental; it failed its pre-set bar, see the report)
 lines the new photo up with the last one using OpenCV 5's learned matching (ALIKED + LightGlue) and marks only what
@@ -18,8 +19,10 @@ Pages: `/` the front page, `/fridge` the fridge, `/shelf` a single-shelf check w
 ## Run it
 
 ```
-uv sync                 # Python 3.12; pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4 (uv.lock)
-uv run pytest           # generated images and a fake model API only: no photos, no paid calls
+uv sync                                # Python 3.12; pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4 (uv.lock)
+uv run python tools/fetch_models.py    # the two ONNX models for What changed? (SHA-1 checked; models/ is git-ignored)
+uv run pytest                          # generated images and a fake model API only: no photos, no paid calls
+node --test tests/js/*.test.mjs        # the page's rules (Node 20+)
 ```
 
 Real model runs need an Anthropic API key in `.env.local` (`ANTHROPIC_API_KEY=...`, git-ignored):
@@ -59,7 +62,9 @@ logs that hold codes and counts only.
 | `verifier/opening.py` | outline checks and straightening (`warpPerspective`); suggestions built but off |
 | `service/handler.py` | the Lambda handler: pages, health, recorded example, scan, identify, straighten |
 | `web/fridge.html`, `web/twin.js` | the fridge page: pick, trace, fill; the browser twin and its rules |
-| `web/scene.js`, `web/twin3d.js` | the schematic 3D view (pure geometry; three.js drawing) |
+| `web/scene.js`, `web/twin3d.js` | the 3D view (pure geometry and library matching; three.js drawing, the change played on the shelf) |
+| `web/compare.js` | What changed? drawn: the two photos, OpenCV's matched pairs, the outcome boxes |
+| `web/items/`, `tools/export_items.py` | the phone app's 52 item models and match words, exported for the 3D view |
 | `web/home.html` | the front page (`/`): the idea, the steps, the measured results |
 | `web/index.html` | the single-shelf check (`/shelf`): upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |

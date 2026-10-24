@@ -29,20 +29,25 @@ Rules the page keeps (`web/fridge.html`):
   things in it asks first and moves them to Unplaced.
 - **Answers stay bound to their photo and layout.** Corners carry the photo's hash; a scan answer is refused if its
   shelf was re-traced or removed meanwhile.
-- **The fridge stays in the browser.** Session storage only; a save is written, read back and compared before the
-  page says "saved". The live handler keeps uploaded photos in memory for the request only; the one recorded
+- **The fridge stays in the browser.** It is kept in this browser on this device (local storage) until the person
+  taps Forget or clears the site's data; one tab writes at a time and another tab opens read-only. A browser without
+  usable Web Locks keeps it in that tab only (session storage); there Forget clears that tab, and the page says a
+  fridge saved earlier on the device is kept and how to clear it. A save is written, read back and compared before
+  the page says "saved". The live handler keeps uploaded photos in memory for the request only; the one recorded
   example it serves was published with the owner's approval.
 
 ## How items are drawn
 
-**Built (this web page):** a schematic 3D view. Each placed thing is a box or cylinder from a basic family (bottle,
-can, jar, carton, tub, tray, pouch, bag, box) chosen by the scan's vessel word; the shelf photo's item box guides
-horizontal position, width and height, clamped inside its own level; depth is approximate. Door bins, retired levels
-and Unplaced are not drawn in 3D (`web/scene.js`).
+**Built (this web page):** a library model when the reading matches a row of the app's item catalogue (the app's
+52 baked models, exported by `tools/export_items.py`; the app's longest-word rule; catalogue size, scaled down uniformly to
+the renderer's limits: at most 90% of the level's height, half its width, and its depth). Otherwise a box or cylinder from a
+basic family (bottle, can, jar, carton, tub, tray, pouch, bag, box) chosen by the scan's vessel word, sized by the
+shelf photo's item box, with its own photo crop on its front when a matching retained crop for that item and shelf is available and
+decodes (the shelf's latest kept photo lists it); otherwise plain. A model that fails to load leaves its placeholder shape. The item box guides horizontal position; depth comes from where its foot stands in the photo (approximate). Door bins, retired
+levels and Unplaced are not drawn in 3D (`web/scene.js`).
 
-**Planned (phone app and later this page):** a library model when the item matches a row of the app's item catalogue;
-otherwise the nearest basic shape at the size the photo shows; the label taken from the photo by flattening a flat
-face with a homography. Per-product models are upgrades for common items, not a requirement.
+**Planned:** the label flattened from the photo with a homography onto a flat face; per-product models are upgrades
+for common items, not a requirement.
 
 ## Beyond the fridge
 
