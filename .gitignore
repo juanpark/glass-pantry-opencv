@@ -26,3 +26,4 @@ samconfig.toml
 .aws/
 *.pem
 *.key
+!web/samples/change/*.jpg
