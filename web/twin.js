@@ -168,6 +168,55 @@ export function ownerStill(twin, o) {
   return !!twin && twin.id === o.twin && isLive(twin, o.level) && (twin.rev[holderOf(twin, o.level)] || 0) === o.rev;
 }
 
+/** The strip of a shelf photo that is read and compared: between the person's two lines (fractions of the
+ * height, either order), full width, with a small margin so a lid touching a line is not cut. Null when the band is
+ * too thin to be a shelf. */
+export const BAND_PAD = 0.03, BAND_MIN = 0.08;
+export function bandCrop(w, h, a, b) {
+  const top = Math.min(a, b), bottom = Math.max(a, b);
+  if (!(top >= 0 && bottom <= 1) || bottom - top < BAND_MIN) return null;
+  const y0 = Math.max(0, Math.round((top - BAND_PAD) * h)), y1 = Math.min(h, Math.round((bottom + BAND_PAD) * h));
+  return {x: 0, y: y0, w, h: y1 - y0};
+}
+
+/** The page's shelf-band steps, one open at a time. A step opens only if the pick that asked for it is still live
+ * once its photo is ready, so a slow older photo never replaces a newer step. An answer (a crop, a cancel) ends only
+ * the step it was made for, so a late crop is never handed to a newer pick, holder or fridge. */
+export class BandSteps {
+  constructor() { this.cur = null; }
+  /** prepare() -> the step's data; live() -> is the pick still current; show(step) draws it. Resolves to the
+   * step's answer, or null when it was replaced, cancelled or went stale. */
+  async open(prepare, live, show) {
+    const data = await prepare();
+    if (!live()) return null;
+    this.end(null);
+    const step = {...data, live};
+    return new Promise(res => { step.res = res; this.cur = step; show(step); });
+  }
+  /** End `step` (default: the open one) with `result`; a stale step's result is dropped. False if not open. */
+  end(result, step = this.cur) {
+    if (!step || this.cur !== step) return false;
+    this.cur = null;
+    step.res(step.live() ? result : null);
+    return true;
+  }
+}
+
+/** A rescan found things moved on the same holder: their place for the 3D view follows (nothing else changes). */
+export function setPlacement(twin, t, byPid) {
+  const p = ticketProblem(twin, t);
+  if (p) return {error: p};
+  const next = clone(twin);
+  let moved = 0;
+  next.items[t.dest] = (next.items[t.dest] || []).map(it => {
+    const u = it.pid && byPid[it.pid];
+    if (!u) return it;
+    moved++;
+    return {...it, ...u};
+  });
+  return {next, moved};
+}
+
 /** Move one Unplaced thing (with the person's edits) onto a live holder, in one change. */
 export function placeUnplaced(twin, index, dest, edits = {}) {
   if (!(index >= 0 && index < twin.unplaced.length)) return {error: "no_such_thing"};
