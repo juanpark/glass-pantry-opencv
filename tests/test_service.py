@@ -130,3 +130,74 @@ def test_a_photo_too_big_to_decode_is_refused_before_counting():
     s, b = call(ev("POST", "/scan", png), scanner=lambda j, k, **_: pytest.fail("no scan"),
                 admitter=lambda: pytest.fail("not counted"))
     assert s == 400 and b["error"] == "bad_photo"
+
+
+# /rescan: OpenCV first; an admission only when a crop must be read
+
+
+def _rescan_body(old, new, items):
+    import cv2
+    enc = lambda im: base64.b64encode(cv2.imencode(".jpg", im, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()).decode()
+    return json.dumps({"old": enc(old), "photo": enc(new), "items": items}).encode()
+
+
+def _pair(add=False):
+    import cv2
+    from tests.synth import shelf
+    from tests.test_change import reshoot
+    old = shelf(seed=3)
+    new, _ = reshoot(old)
+    if add:
+        cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+    return old, new
+
+
+ITEMS = [{"id": "a", "box": [300, 420, 460, 640]}, {"id": "b", "box": [900, 760, 1060, 980]}]
+
+
+def test_rescan_switched_off_does_nothing():
+    s, b = call(ev("POST", "/rescan", b"{}", "application/json"), is_enabled=lambda: False,
+                rescanner=lambda *a, **k: pytest.fail("no rescan when off"))
+    assert s == 503 and b["error"] == "paused"
+
+
+@pytest.mark.parametrize("items", [None, "x", [{"id": "a"}], [{"id": "a", "box": [1, 2, 0, 5]}],
+                                   [{"id": "", "box": [0, 0, 5, 5]}], [{"id": "a", "box": [0, 0, float("inf"), 5]}]])
+def test_rescan_refuses_malformed_items_before_any_work(items):
+    old, new = _pair()
+    body = _rescan_body(old, new, items).replace(b"Infinity", b"1e999")
+    s, _ = call(ev("POST", "/rescan", body, "application/json"), rescanner=lambda *a, **k: pytest.fail("not run"))
+    assert s == 400
+
+
+def test_rescan_with_nothing_changed_spends_no_admission_and_no_model_call():
+    old, new = _pair()
+    s, b = call(ev("POST", "/rescan", _rescan_body(old, new, ITEMS), "application/json"),
+                admitter=lambda: pytest.fail("nothing to read, nothing counted"))
+    assert s == 200 and b["action"] == "file" and b["model_calls"] == 0 and b["counted"] is False, b
+
+
+def test_rescan_counts_once_and_reads_only_the_new_region(monkeypatch, capsys):
+    from verifier import claude
+    from verifier.scan import Proposal
+    sent = []
+
+    def fake(self, jpeg):
+        sent.append(jpeg)
+        return Proposal([], [{"id": "i1", "label": "서울우유", "box": [5, 5, 50, 50]}], "m", {"cost": 0.01})
+
+    monkeypatch.setattr(claude.ClaudeProposer, "propose", fake)
+    spent = []
+    old, new = _pair(add=True)
+    s, b = call(ev("POST", "/rescan", _rescan_body(old, new, ITEMS), "application/json"),
+                admitter=lambda: spent.append(1) or True)
+    assert s == 200 and b["action"] == "ask" and len(spent) == 1 and len(sent) == 1 and b["model_calls"] == 1, b
+    assert "서울우유" not in capsys.readouterr().out
+
+
+def test_rescan_at_the_daily_limit_still_answers_with_the_region_unread(monkeypatch):
+    from verifier import claude
+    monkeypatch.setattr(claude.ClaudeProposer, "propose", lambda self, j: pytest.fail("no call over the limit"))
+    old, new = _pair(add=True)
+    s, b = call(ev("POST", "/rescan", _rescan_body(old, new, ITEMS), "application/json"), admitter=lambda: False)
+    assert s == 200 and b["action"] == "ask" and b["new"][0]["unread"] == "daily_limit" and b["counted"] is False, b
