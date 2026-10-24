@@ -155,6 +155,11 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <label class="btn" id="rescanPickLabel" hidden>What changed? (experimental)<input type="file" id="rescanPick" accept="image/*"></label>
       <span id="fillBusy" class="row muted" hidden><span class="spinner"></span><span id="fillBusyText">Reading the photo, about 40 seconds…</span></span>
     </div>
+    <div class="row" id="bandActions" hidden>
+      <span class="muted" id="bandHelp" style="flex-basis:100%"></span>
+      <button class="primary" id="bandOk" type="button">Read this part</button>
+      <button id="bandCancel" type="button">Cancel</button>
+    </div>
     <div id="fillNote" class="note" hidden></div>
     <div class="stage" id="fillStage" hidden><canvas id="fillCv"></canvas></div>
     <div id="fillList" hidden>
@@ -692,6 +697,7 @@ function holderName(id){
   return `${c.name.en}, ${levelName(id).toLowerCase()}`;
 }
 function openFill(id){
+  endBand(null);
   fill = {level:id, op:ops.start("fill"), ticket:null, res:null};
   $("#fillCard").hidden = false; $("#traceCard").hidden = true; trace = null; ops.start("trace");
   $("#fillTitle").textContent = `Fill: ${holderName(id)}`;
@@ -702,7 +708,7 @@ function openFill(id){
   $("#rescanPickLabel").hidden = !T.rescanItems(twin, rescanRec(id)).length;
   $("#fillCard").scrollIntoView({behavior:"smooth", block:"start"});
 }
-$("#fillClose").onclick = () => { fill = null; ops.start("fill"); $("#fillCard").hidden = true; };
+$("#fillClose").onclick = () => { endBand(null); fill = null; ops.start("fill"); $("#fillCard").hidden = true; };
 const fillLive = op => fill && ops.live(op);
 function unplacedNote(text, kind = ""){ const n = $("#unplacedNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
 function modelNoteSay(text, kind = ""){ const n = $("#modelNote"); n.hidden = !text; n.className = "note " + kind; n.textContent = text || ""; }
@@ -710,20 +716,80 @@ function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; 
 
 $("#fillPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
-  const my = fill.op = ops.start("fill");  // a newer photo makes the older reply stale
-  fill.ticket = T.ticket(twin, fill.level); fill.res = null;  // the fridge, holder and layout this photo is for
-  fillNote(""); $("#fillList").hidden = true; $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
+  const ctx = fill, my = ctx.op = ops.start("fill");  // a newer photo makes the older reply stale
+  ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null;  // the fridge, holder and layout this photo is for
+  fillNote(""); $("#fillList").hidden = true; $("#rescanBox").hidden = true;
   try{
-    const blob = await shrink(f);
-    const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:blob});
+    const pick = await chooseBand(await shrink(f), lastBand(ctx.level), my);
+    if(!pick || !fillLive(my) || fill !== ctx) return;
+    if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
+    $("#fillStage").hidden = true; $("#fillBusy").hidden = false;
+    const r = await fetch("scan", {method:"POST", headers:{"content-type":"image/jpeg"}, body:pick.blob});
     const body = await r.json();
     if(!fillLive(my)) return;
     if(!r.ok){ fillNote(body.message || "The engine said: " + body.error, "bad"); return; }
-    fill.res = body; fill.blob = blob;
-    showScan(body, URL.createObjectURL(blob), my);
+    ctx.res = body; ctx.blob = pick.blob; ctx.band = pick.band;
+    showScan(body, URL.createObjectURL(pick.blob), my);
   }catch(err){ if(fillLive(my)) fillNote(err.message === "decode" ? UNREADABLE : "The photo could not be sent. Check the connection and try again.", "bad"); }
   finally{ if(fillLive(my)) $("#fillBusy").hidden = true; }
 });
+
+// ---------- the shelf band: only the strip between two lines is read and compared ----------
+// A shelf photo usually shows the shelves above and below too. The person drags two lines to this shelf's top and
+// bottom; only that strip (T.bandCrop) goes to the engine, so nothing from another shelf can be read or filed here.
+let band = null;  // {img, blob, lines:[a, b], op, res}
+function lastBand(level){ const r = rescanRec(level); return r && Array.isArray(r.band) ? r.band : null; }
+async function chooseBand(blob, preset, my){
+  const img = await loadImg(URL.createObjectURL(blob));
+  if(band) band.res(null);  // an older band step gives way
+  return new Promise(res => {
+    band = {img, blob, lines: preset ? [...preset] : [0.2, 0.8], op: my, res};
+    $("#bandHelp").textContent = preset ? "The lines are where this shelf was last time. Check them, then read." :
+      "Drag the two lines to the top and bottom of this shelf. Only the part between them is read.";
+    $("#bandActions").hidden = false; $("#fillStage").hidden = false;
+    drawBand();
+  });
+}
+function endBand(result){ if(!band) return; const b = band; band = null; $("#bandActions").hidden = true; b.res(result); }
+function drawBand(){
+  const cv = $("#fillCv"), ctx = cv.getContext("2d"), img = band.img;
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+  const [a, b] = [...band.lines].sort((x, y) => x - y), H = cv.height, W = cv.width;
+  const lw = Math.max(3, W / 250), fs = Math.round(Math.min(W / 32, H / 14));
+  ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(0, 0, W, a * H); ctx.fillRect(0, b * H, W, H - b * H);
+  ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  band.lines.forEach((v, i) => {
+    ctx.strokeStyle = "#1f6f5c"; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(0, v * H); ctx.lineTo(W, v * H); ctx.stroke();
+    const t = v === a ? "Top of this shelf" : "Bottom of this shelf", w = ctx.measureText(t).width + fs * 0.6;
+    const y = Math.max(fs, Math.min(H - fs, v * H + (v === a ? fs : -fs)));
+    ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillRect(fs * 0.3, y - fs * 0.7, w, fs * 1.4);
+    ctx.fillStyle = "#1f6f5c"; ctx.fillText(t, fs * 0.6, y);
+  });
+}
+(() => {
+  const cv = $("#fillCv"); let drag = -1;
+  const yAt = e => { const r = cv.getBoundingClientRect(); return (e.clientY - r.top) / r.height; };
+  cv.addEventListener("pointerdown", e => {
+    if(!band) return;
+    const r = cv.getBoundingClientRect(), reach = Math.max(0.06, (e.pointerType === "touch" ? FINGER * 1.5 : FINGER) / r.height);
+    const y = yAt(e); let d = reach; drag = -1;
+    band.lines.forEach((v, i) => { if(Math.abs(v - y) < d){ d = Math.abs(v - y); drag = i; } });
+    if(drag >= 0) cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", e => { if(!band || drag < 0) return; band.lines[drag] = Math.max(0, Math.min(1, yAt(e))); drawBand(); });
+  const up = () => { drag = -1; }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+})();
+$("#bandCancel").onclick = () => endBand(null);
+$("#bandOk").onclick = () => {
+  if(!band) return;
+  const img = band.img, r = T.bandCrop(img.naturalWidth, img.naturalHeight, band.lines[0], band.lines[1]);
+  if(!r){ fillNote("The two lines are too close together. Move them to the top and bottom of the shelf.", "bad"); return; }
+  const c = document.createElement("canvas"); c.width = r.w; c.height = r.h;
+  c.getContext("2d").drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+  const lines = [...band.lines].sort((x, y) => x - y);
+  c.toBlob(b => b ? endBand({blob:b, band:lines}) : fillNote("This photo could not be cut. Try again.", "bad"), "image/jpeg", 0.9);
+};
+
 
 const WHY = {"photo:blurry":"The photo is out of focus.", "photo:shake":"The photo is smeared by movement.",
   "photo:dark":"The photo is too dark to read labels.", "photo:blown":"Glare hides part of the shelf.",
@@ -810,7 +876,7 @@ $("#fillOk").onclick = () => {
   fillNote(`Added ${add.length} to ${holderName(fill.level)}.`, "ok");
   const fr = (fill.res.trace || []).find(s => s.step === "frames");
   const boxes = ((fill.res.proposal || {}).items || []).map(it => ({pid:`${source}:${it.id}`, box:it.box}));
-  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.blob, fr.size, boxes.filter(b => add.some(a => a.pid === b.pid)));
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.blob, fr.size, boxes.filter(b => add.some(a => a.pid === b.pid)), fill.band);
   $("#fillList").hidden = true; fill.res = null;
   openFillKeep();
   render();
@@ -822,13 +888,13 @@ const REC_LONG = 1568;  // the size the engine measures at (frames.LONG), so the
 function rescanAll(){ try{ return JSON.parse(store().getItem(T.RESCAN_KEY) || "{}") || {}; }catch{ return {}; } }
 function rescanRec(level){ const r = rescanAll()[level]; return r && r.twin === twin.id ? r : null; }
 const recGen = {};  // per holder: only the newest confirmed photo may become its record
-async function saveRescan(owner, blob, size, items){  // best effort: without it, only "Photograph it" is offered
+async function saveRescan(owner, blob, size, items, bandLines){  // best effort: without it, only "Photograph it" is offered
   const level = owner.level, gen = recGen[level] = (recGen[level] || 0) + 1;  // taken before any await
   try{
     const small = await shrink(blob, REC_LONG);
     const img = await loadImg(URL.createObjectURL(small));
     const k = img.naturalWidth / size[0];
-    const rec = {twin:owner.twin, level, rev:owner.rev, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
+    const rec = {twin:owner.twin, level, rev:owner.rev, band:bandLines || null, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
                  items:items.filter(i => Array.isArray(i.box)).map(i => ({pid:i.pid, box:i.box.map(v => v * k)}))};
     // a fridge switch, a re-trace or a newer confirmed photo while this one was prepared: this one is not kept
     if(recGen[level] !== gen || !T.ownerStill(twin, owner)) return;
@@ -848,11 +914,11 @@ $("#rescanPick").addEventListener("change", async e => {
   const rec = rescanRec(ctx.level), items = T.rescanItems(twin, rec);
   if(!items.length) return;
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
-  let blob;
-  try{ blob = await shrink(f); }
+  let pick;
+  try{ pick = await chooseBand(await shrink(f), rec.band, my); }
   catch(err){ if(fill === ctx && ops.live(my)) fillNote(err.message === "decode" ? UNREADABLE : "This photo could not be opened.", "bad"); return; }
-  if(fill !== ctx || !ops.live(my)) return;
-  ctx.rescan = {blob, rec, items, res:null};
+  if(!pick || fill !== ctx || !ops.live(my)) return;
+  ctx.rescan = {blob:pick.blob, band:pick.band, rec, items, res:null};
   sendRescan(ctx, my, false);  // OpenCV only first: questions and marked spots, no model call
 });
 $("#rescanRead").onclick = () => { if(fill && fill.rescan) sendRescan(fill, fill.op = ops.start("fill"), true); };
@@ -951,11 +1017,18 @@ $("#rescanOk").onclick = () => {
   let next = twin;
   if(gone.length){ const r = T.unplaceItems(next, fill.ticket, gone); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
   if(add.length){ const r = T.addItems(next, fill.ticket, add.map(({box, ...a}) => a)); if(r.error){ fillNote("This shelf changed while the photo was compared. Nothing was changed; try again.", "bad"); return; } next = r.next; }
-  if((gone.length || add.length) && !commit(next, fillNote)) return;
+  // things OpenCV found moved on this shelf take their new place in the 3D view
+  const moves = {};
+  for(const o of res.items || []) if(o.outcome === "moved" && o.box_now && fr && !gone.includes(o.id)){
+    const [x0, y0, x1, y1] = o.box_now, [w, h] = fr.size;
+    moves[o.id] = {xFrac:(x0 + x1) / 2 / w, wFrac:(x1 - x0) / w, hFrac:(y1 - y0) / h};
+  }
+  if(Object.keys(moves).length){ const r = T.setPlacement(next, fill.ticket, moves); if(!r.error) next = r.next; }
+  if((gone.length || add.length || Object.keys(moves).length) && !commit(next, fillNote)) return;
   // the new photo becomes the one the next rescan compares with: things still here, where they stand now
   const keep = (res.items || []).filter(o => !gone.includes(o.id) && o.box_now).map(o => ({pid:o.id, box:o.box_now}));
-  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))]);
-  fillNote(`Done: ${gone.length} moved to Unplaced, ${add.length} added. Nothing else changed.`, "ok");
+  if(fr) saveRescan(T.recordOwner(twin, fill.level), fill.rescan.blob, fr.size, [...keep, ...add.map(a => ({pid:a.pid, box:a.box}))], fill.rescan.band);
+  fillNote(`Done: ${gone.length} moved to Unplaced, ${add.length} added, ${Object.keys(moves).length} moved on this shelf (3D updated). Nothing else changed.`, "ok");
   $("#rescanBox").hidden = true; fill.rescan = null;
   openFillKeep(); render();
 };

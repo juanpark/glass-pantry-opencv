@@ -320,3 +320,26 @@ test("a rescan record's owner is fixed at confirm time and checked before writin
   const retraced = T.applyTrace(a, "c", [0.5]).next;
   assert.ok(!T.ownerStill(retraced, owner), "the holder's layout changed during the save");
 });
+
+// shelf crop: the person's two lines decide the strip that is read and compared
+test("the crop strip is the band between the two lines plus a small margin, inside the photo", () => {
+  const r = T.bandCrop(1000, 800, 0.30, 0.60);
+  assert.deepEqual(r, {x: 0, y: Math.round(0.30 * 800 - 0.03 * 800), w: 1000, h: Math.round(0.33 * 800 + 0.03 * 800)});
+  const edge = T.bandCrop(1000, 800, 0.01, 0.99);
+  assert.ok(edge.y === 0 && edge.y + edge.h <= 800);
+});
+
+test("a band too thin to hold a shelf is refused, and the lines may come in either order", () => {
+  assert.equal(T.bandCrop(1000, 800, 0.50, 0.55), null);
+  assert.deepEqual(T.bandCrop(1000, 800, 0.60, 0.30), T.bandCrop(1000, 800, 0.30, 0.60));
+});
+
+test("moved things take their new place in the twin; other things and other holders are untouched", () => {
+  const row = {key: "k", version: 1, compartments: [{id: "c", levels: [{id: "c/1", kind: "shelf", top: 0, floor: 1}]}], panels: []};
+  let tw = T.newTwin(row, "sha", () => 0.5);
+  tw = T.addItems(tw, T.ticket(tw, "c/1"), [{appearance: "a", pid: "p:i1", xFrac: 0.2}, {appearance: "b", pid: "p:i2", xFrac: 0.5}]).next;
+  const r = T.setPlacement(tw, T.ticket(tw, "c/1"), {"p:i1": {xFrac: 0.8, wFrac: 0.1, hFrac: 0.4}, "p:nope": {xFrac: 0.1}});
+  assert.deepEqual(r.next.items["c/1"].map(i => i.xFrac), [0.8, 0.5]);
+  assert.equal(r.next.items["c/1"][0].hFrac, 0.4);
+  assert.equal(r.moved, 1);
+});
