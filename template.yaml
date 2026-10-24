@@ -17,7 +17,7 @@ Resources:
       FunctionName: glass-pantry-opencv
       PackageType: Image
       Architectures: [x86_64]
-      MemorySize: 2048
+      MemorySize: 4096  # more memory buys more CPU; the rescan models run on CPU
       Timeout: 150
       Role: arn:aws:iam::155669502936:role/glass-pantry-opencv-fn
       LoggingConfig:
