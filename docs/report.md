@@ -96,11 +96,13 @@ comparisons.
    **A person confirms the list before anything is kept.**
 
 **The shelf band.** A shelf photo usually shows the shelves above and below too. After picking a photo, the person
-drags two lines to this shelf's top and bottom; only that strip (full width, 3% margin) is sent, so nothing from
-another shelf can be read or filed here; the zoom pass's close-ups are cut from the strip too. The lines are kept and
+drags two lines to this shelf's top and bottom; only that strip, plus a margin of 3% of the photo's height above and
+below, is sent, which reduces what the model sees of the neighbouring shelves; the zoom pass's close-ups are cut from
+the strip too. It does not establish where a thing physically stands: perspective, the margin or a misplaced line can
+still include a neighbour's things, and the person reviews the list as before. The lines are kept and
 offered again on the next photo of that shelf.
 
-**What changed? (experimental).** After a shelf has been filed, its photo (long edge 1568 px) and item boxes are kept
+**What changed? (experimental).** After a shelf has been filed, its photo (long edge at most 1568 px) and item boxes are kept
 in the tab beside the fridge. A later photo of the same shelf is first compared by OpenCV alone, with no model call:
 each known item is *no visible change*, *possible change*, *moved* or *cannot compare*, and regions with something
 new are marked. Only then may the person ask the model to read the marked spots (one admission, at most 6 crops).
@@ -109,8 +111,12 @@ place in the 3D view. It failed its pre-set bar (§6) and is labelled experiment
 
 ![Architecture: browser, AWS Lambda with OpenCV 5, Anthropic API](architecture/architecture.png)
 
-The browser holds the fridge (session storage) and draws it. The Lambda container receives one photo per request,
-keeps it in memory only for that request, runs the OpenCV steps, and calls the Anthropic API. A shelf scan or a
+The browser holds the fridge (session storage) and draws it. The picture shows the scan, identify and straighten
+paths: the Lambda container receives one photo per request, keeps it in memory only for that request, runs the
+OpenCV steps, and calls the Anthropic API. *What changed?* (`POST /rescan`) is a second route not drawn there: it
+receives two photos (the last confirmed one, kept in the tab, and the new one), also only in memory. Its first pass
+is OpenCV only, with no admission and no model call; the optional reading of the marked spots takes one admission,
+and only when a spot is actually read. A shelf scan or a
 fridge identification takes one admission from the DynamoDB daily counter before any model call (identify's quality
 gate runs before its admission, the shelf scan's gate just after it); outline straightening needs no admission. The API key and the owner's on/off switch are in SSM Parameter Store.
 
@@ -208,7 +214,7 @@ questions.
 pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 false item flag per pair; ≤ 2 false
 "something new" regions per pair; under 10 s per pair on Lambda; SIFT reported beside it.
 - **Round 1** (5 pairs): **failed**. Both drawer pairs were shot with the phone turned 90° between photos and did not
-  align (7 and 39 matches); one of two additions was found. Those pairs were then used for development (the
+  align (7 inliers and 39 candidate matches, respectively); one of two additions was found. Those pairs were then used for development (the
   quarter-turn retry and three per-item rules), so they are no longer evidence.
 - **Round 2** (6 new pairs, two with nothing changed, one with the phone turned; code locked first): aligned 6/6;
   removals 3/3; the one moved item flagged and its new place found; the one addition found; nothing-changed pairs
@@ -219,8 +225,9 @@ pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 f
   above are the corrected ones, from the same recorded runs.
 - **Time:** this Mac 2.0–3.2 s per pair (SIFT 0.2 s). On Lambda, OpenCV-only pass on one unchanged pair (0.77 MB
   request), end to end (engine): at 2048 MB the first call took 13.9 s (12.2 s, loading the models), then 7.3 s
-  (5.7 s), failing the 10 s bar on a first call; at 4096 MB (more CPU, about the same cost per call) 9.0 s (7.3 s),
-  then 4.4 s (2.8 s), both under it. One pair, three calls each: a spot check, not a distribution.
+  (5.7 s), failing the 10 s bar on a first call; at 4096 MB (more CPU) 9.0 s (7.3 s), then 4.4 s (2.8 s), both
+  under it. One pair, three calls each: a spot check, not a distribution. Billed duration and cost per call were not
+  measured; from the warm engine times alone (memory × time) the two settings would cost about the same.
 - **Not measured:** both rounds compared whole photos; the page now compares the shelf band only, and that
   configuration has not been evaluated. Per the frozen plan the feature stays experimental.
 
@@ -248,7 +255,7 @@ pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 f
 - **What changed?** failed its pre-set bar on false flags (§6). Things leaning on or hidden behind a removed item
   look changed and are asked about; soft packs that shift do too. It compares one plane (a homography), so strong
   parallax between the two photos raises questions. Items the first reading never listed are not tracked. The band
-  configuration on the page has not been evaluated. The first call after the server has been idle takes about 9 s.
+  configuration on the page has not been evaluated. The recorded first call on the timing pair took 9.0 s; how long a first call takes in general was not measured.
 - **Identifying the fridge** knows 11 models and 5 generic layouts. The "same family" rule is a prefix heuristic,
   and maker conflicts are only recognised for Samsung, LG and Winia.
 - Real-phone touch use has been tested in emulation; a test on an iPhone is pending at the time of writing.

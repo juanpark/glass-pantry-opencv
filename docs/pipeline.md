@@ -23,8 +23,8 @@ Rules the page keeps (`web/fridge.html`):
 - **Nothing is filed without a person.** A suggestion (when enabled) is drawn dashed and labelled; an opening is accepted only after
   the person confirms the corners. A photo where the opening cannot be framed is traced unstraightened, labelled
   unverified.
-- **OpenCV never invents.** It never adds a shelf, an item or a model, and never moves a line by itself; a line the
-  person drops near an edge lands on it.
+- **OpenCV never invents.** It never adds a shelf, an item or a model, and never moves a line by itself; with edge snap
+  targets switched on (they are off, above), a line the person drops near an edge would land on it.
 - **A scan adds; it never deletes.** Removing a shelf moves its things to Unplaced; changing the fridge model with
   things in it asks first and moves them to Unplaced.
 - **Answers stay bound to their photo and layout.** Corners carry the photo's hash; a scan answer is refused if its
