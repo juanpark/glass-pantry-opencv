@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - run: uv run --frozen python tools/fetch_models.py
       - run: uv run --frozen pytest -q
       - run: node --test tests/js/twin.test.mjs tests/js/scene.test.mjs
 

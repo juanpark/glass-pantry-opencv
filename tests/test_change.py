@@ -80,3 +80,56 @@ def test_something_new_outside_the_old_boxes_is_not_called_no_change():
     assert al.ok
     r = change.compare(old, [{"id": "a", "box": [300, 420, 460, 640]}], new, al)
     assert r["outcome"] == change.OLD_ITEMS_SAME  # only the compared item is vouched for, never the whole shelf
+
+
+# OpenCV 5 learned matching (ALIKED + LightGlue); the models are fetched by tools/fetch_models.py
+
+
+def test_learned_matching_aligns_an_unchanged_reshoot():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    al = change.align(old, new, method="learned")
+    assert al.ok and al.method == "learned" and al.inliers >= change.MIN_INLIERS, al
+    r = change.compare(old, ITEMS, new, al)
+    assert r["outcome"] == change.OLD_ITEMS_SAME, r
+
+
+def test_learned_matching_cannot_compare_a_different_shelf():
+    al = change.align(rng_shelf(seed=3), rng_shelf(seed=11), method="learned")
+    assert not al.ok, al
+
+
+def test_sift_is_still_available_and_named():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    assert change.align(old, new, method="sift").method == "sift"
+
+
+def test_something_new_is_found_where_it_was_added():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+    al = change.align(old, new, method="learned")
+    regions = change.new_regions(old, ITEMS, new, al)
+    hits = [b for b in regions if b[0] < 1400 and b[2] > 1150 and b[1] < 260 and b[3] > 140]
+    assert len(hits) == 1 and len(regions) == 1, regions
+
+
+def test_an_unchanged_reshoot_has_nothing_new():
+    old = rng_shelf()
+    new, _ = reshoot(old)
+    assert change.new_regions(old, ITEMS, new, change.align(old, new, method="learned")) == []
+
+
+def test_a_removed_item_is_not_also_reported_as_something_new():
+    old = rng_shelf()
+    new, M = reshoot(old)
+    pts = cv2.transform(np.float32([[[900, 760]], [[1060, 980]]]), M[:2]).reshape(-1, 2).astype(int)
+    (x0, y0), (x1, y1) = pts.min(0), pts.max(0)
+    new[y0:y1, x0:x1] = cv2.convertScaleAbs(rng_shelf(seed=99)[y0:y1, x0:x1], alpha=1.12, beta=5)
+    assert change.new_regions(old, ITEMS, new, change.align(old, new, method="learned")) == []
+
+
+def test_no_new_regions_without_an_alignment():
+    old, other = rng_shelf(seed=3), rng_shelf(seed=11)
+    assert change.new_regions(old, ITEMS, other, change.align(old, other)) == []
