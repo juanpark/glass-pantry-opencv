@@ -39,7 +39,7 @@ export function sceneOf(twin, row) {
         const d = Math.min(cd - 20, w * sd / sw);
         const fx = Number.isFinite(it.xFrac) ? clamp(it.xFrac, 0, 1) : (its.length > 1 ? 0.12 + 0.76 * i / (its.length - 1) : 0.5);
         const cx = clamp(x0 + fx * cw, x0 + w / 2, x1 - w / 2);
-        parts.push({kind: "item", level: lid, shape, label: `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`,
+        parts.push({kind: "item", level: lid, pid: it.pid, shape, label: `${it.label || it.appearance}${it.count > 1 ? " ×" + it.count : ""}`,
                     box: [cx - w / 2, base, clamp(z0 + cd / 2 + 40 - d / 2, z0, z1 - d), w, h, d]});  // a little forward
       });
     }
@@ -49,9 +49,40 @@ export function sceneOf(twin, row) {
 
 /** Where the camera starts: a three-quarter view from the front right, far enough that the cabinet's bounding sphere
  * fits both the vertical and the horizontal field of view at this aspect (width / height). */
-export function cameraFor({w, h, d}, aspect, fov = 35) {
+export function cameraFor({w, h, d}, aspect, fov = 35, at = null) {
   const vf = fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * aspect);
   const radius = Math.hypot(w, h, d) / 2, dist = radius / Math.sin(Math.min(vf, hf) / 2) * 1.02;
-  const dir = [0.42, 0.18, 1], n = Math.hypot(...dir), target = [0, h / 2, 0];
+  const dir = [0.42, 0.18, 1], n = Math.hypot(...dir), target = at || [0, h / 2, 0];
   return {fov, target, position: dir.map((v, i) => target[i] + v / n * dist)};
+}
+
+/** What changed on one shelf between two drawings: things there before and after (by pid) that moved, things that
+ * arrived, and things that left. Only that shelf, and only rows with a pid, so nothing elsewhere is shown as changed. */
+export function changeOf(beforeParts, afterParts, level) {
+  const on = ps => new Map(ps.filter(p => p.kind === "item" && p.level === level && p.pid).map(p => [p.pid, p]));
+  const a = on(beforeParts), b = on(afterParts);
+  const moved = [], added = [], gone = [];
+  for (const [pid, p] of b) {
+    const q = a.get(pid);
+    if (!q) added.push(pid);
+    else if (q.box.some((v, i) => Math.abs(v - p.box[i]) > 1)) moved.push({pid, from: q.box, to: p.box});
+  }
+  for (const [pid, q] of a) if (!b.has(pid)) gone.push(q);
+  return {moved, added, gone};
+}
+
+/** The first ray hit whose object and every parent are shown: a faded-out thing never takes a tap. */
+export function firstShown(hits) {
+  return hits.find(h => { if (!h.object.isMesh) return false; for (let o = h.object; o; o = o.parent) if (!o.visible) return false; return true; });
+}
+
+/** The box around one level: its plate or drawer and everything standing on it, up to the level above. For framing
+ * the camera on the shelf that just changed. Returns {at: centre, w, h, d} or null. */
+export function levelBox(parts, level) {
+  const own = parts.filter(p => p.level === level);
+  if (!own.length) return null;
+  const lo = [0, 1, 2].map(i => Math.min(...own.map(p => p.box[i])));
+  const hi = [0, 1, 2].map(i => Math.max(...own.map(p => p.box[i] + p.box[i + 3])));
+  const [w, h, d] = [0, 1, 2].map(i => hi[i] - lo[i]);
+  return {at: [0, 1, 2].map(i => (lo[i] + hi[i]) / 2), w, h: Math.max(h, 120), d};
 }

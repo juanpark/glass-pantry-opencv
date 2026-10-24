@@ -111,3 +111,36 @@ test("the starting camera shows the whole cabinet, portrait phone and desktop, f
     }
   }
 });
+
+test("the box around a level holds its plate and its things, and the camera can be aimed at it", async () => {
+  const {levelBox, cameraFor: cam} = await import("../../web/scene.js");
+  const parts = [{level: "L", kind: "shelf", box: [-300, 400, -200, 600, 6, 400]},
+                 {level: "L", kind: "item", box: [-100, 406, -50, 80, 200, 80]},
+                 {level: "M", kind: "item", box: [0, 900, 0, 80, 200, 80]}];
+  const b = levelBox(parts, "L");
+  assert.deepEqual(b.at, [0, 503, 0]); assert.equal(b.w, 600); assert.equal(b.h, 206);
+  assert.equal(levelBox(parts, "none"), null);
+  assert.deepEqual(cam(b, 1, 35, b.at).target, b.at);
+});
+
+test("the shown change is scoped to the shelf that changed; unidentified or other-shelf rows never animate", async () => {
+  const {changeOf} = await import("../../web/scene.js");
+  const P = (level, pid, x) => ({kind: "item", level, pid, box: [x, 0, 0, 10, 10, 10]});
+  const before = [P("A", "s:1", 0), P("A", "s:2", 50), P("B", "s:1", 0), P("B", undefined, 90)];
+  const after = [P("A", "s:1", 30), P("A", "s:3", 80), P("B", "s:1", 0), P("B", undefined, 90)];
+  const c = changeOf(before, after, "A");
+  assert.deepEqual(c.moved.map(m => m.pid), ["s:1"]);
+  assert.deepEqual(c.added, ["s:3"]);
+  assert.deepEqual(c.gone.map(p => p.pid), ["s:2"]);
+  // shelf B's unchanged rows (one with no pid, one sharing A's photo id) are not part of the change
+  const all = [...c.moved.map(m => m.pid), ...c.added, ...c.gone.map(p => p.pid)];
+  assert.equal(all.length, 3);
+});
+
+test("a tap picks the first hit that is still shown, skipping faded-out things", async () => {
+  const {firstShown} = await import("../../web/scene.js");
+  const gone = {visible: false, parent: null}, live = {visible: true, parent: null};
+  const hits = [{object: {isMesh: true, visible: true, parent: gone}}, {object: {isMesh: true, visible: true, parent: live}}];
+  assert.equal(firstShown(hits), hits[1]);
+  assert.equal(firstShown([hits[0]]), undefined);
+});
