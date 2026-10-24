@@ -344,3 +344,14 @@ export function traceNames(twin, comp, vs) {
 export function levelLines(twin, comp) {
   return liveLevels(twin, comp).slice(0, -1).map(([id, l]) => ({v: l.floor, id}));
 }
+
+/** (level, pid) -> {photo, box} from the stored rescan records of this twin, per shelf: a photo id that two shelves
+ * share keeps each shelf's own photo. null when that shelf has no record of the thing. */
+export function facesOf(records, twinId) {
+  return (level, pid) => {
+    const r = records && records[level];
+    if (!r || r.twin !== twinId) return null;
+    const it = (r.items || []).find(i => i.pid === pid);
+    return it ? {photo: r.photo, box: it.box} : null;
+  };
+}

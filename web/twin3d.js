@@ -2,7 +2,8 @@
 // view. Everything about where things go is decided in scene.js; this file only chooses materials and the camera.
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
-import {sceneOf, cameraFor, levelBox, changeOf, firstShown} from "./scene.js";
+import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+import {sceneOf, cameraFor, levelBox, changeOf, firstShown, setFade} from "./scene.js";
 
 const PALETTE = [0xd9a55b, 0x7fb3a6, 0xc96f5a, 0x8aa0c8, 0xb7c27a, 0xd08fb0, 0x9c8bd1, 0xe0c46c];
 
@@ -20,17 +21,23 @@ function tag(text){  // a readable name that always faces the camera
   return s;
 }
 
+const models = new Map();  // key -> Promise of the loaded scene, shared by every mount
+function model(key){
+  if(!models.has(key)) models.set(key, new GLTFLoader().loadAsync(`items/item-${key}.glb`).then(g => g.scene));
+  return models.get(key);
+}
+
 const centre = b => new THREE.Vector3(b[0] + b[3] / 2, b[1] + b[4] / 2, b[2] + b[5] / 2);
 
 /** Draw `twin` (layout `row`) into `host`. With `change` = {from: the fridge just before, level: the shelf that changed},
  * on that shelf only: things that left fade out, things that moved slide from where they stood, new things drop in.
  * Returns {dispose}. */
-export function mount(host, twin, row, change = null){
-  const {cabinet: {w: W, h: H, d: D}, parts} = sceneOf(twin, row);
+export function mount(host, twin, row, change = null, {lib = null, face = null} = {}){
+  const {cabinet: {w: W, h: H, d: D}, parts} = sceneOf(twin, row, lib);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf4f2ee);
   const cam = new THREE.PerspectiveCamera(35, host.clientWidth / host.clientHeight, 10, 20000);
-  let home = null;  // after a change: the shelf that changed; otherwise the whole cabinet
+  let alive = true, home = null;  // home: after a change, the shelf that changed; otherwise the whole cabinet
   const frame = () => {  // the home view at this aspect (scene.js, tested for every layout)
     const c = home ? cameraFor(home, cam.aspect, cam.fov, home.at) : cameraFor({w: W, h: H, d: D}, cam.aspect, cam.fov);
     cam.position.set(...c.position); cam.lookAt(...c.target);
@@ -43,7 +50,7 @@ export function mount(host, twin, row, change = null){
   ren.domElement.style.touchAction = "none";  // one finger turns the fridge instead of scrolling the page
   host.append(ren.domElement);
   const ctl = new OrbitControls(cam, ren.domElement);
-  ctl.target.set(...target); ctl.enableDamping = true; ctl.update();
+  ctl.target.set(...target); ctl.enableDamping = true; ctl.zoomToCursor = true; ctl.update();  // zoom goes where you point
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b0a4, 2.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(W, H * 1.5, D * 2); scene.add(sun);
 
@@ -56,13 +63,26 @@ export function mount(host, twin, row, change = null){
   const glass = new THREE.MeshStandardMaterial({color: 0xbfe0e6, transparent: true, opacity: 0.45, roughness: 0.1});
   const drawer = new THREE.MeshStandardMaterial({color: 0xcfd6d3, transparent: true, opacity: 0.35});
   let k = 0;
-  const diff = change ? changeOf(sceneOf(change.from, row).parts, parts, change.level) : {moved: [], added: [], gone: []};
+  const diff = change ? changeOf(sceneOf(change.from, row, lib).parts, parts, change.level) : {moved: [], added: [], gone: []};
   const movedFrom = new Map(diff.moved.map(m => [m.pid, m.from])), added = new Set(diff.added);
   const moves = [], things = [];  // moves: {obj, a: start, b: end, fade: -1 out | 0 | 1 in}
   const item = (p, colour) => {
     const [, , , w, h, d] = p.box, c = centre(p.box);
     const geo = p.shape === "cyl" ? new THREE.CylinderGeometry(w / 2, w / 2, h, 24) : new THREE.BoxGeometry(w, h, d);
-    const g = new THREE.Group(), m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: colour, roughness: 0.6, transparent: true}));
+    const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({color: colour, roughness: 0.6, transparent: true});
+    const pic = !p.model && face && face(p.level, p.pid);  // no library model: the thing's own photo on its front
+    const m = new THREE.Mesh(pic ? new THREE.BoxGeometry(w, h, d) : geo, pic ? [mat, mat, mat, mat, mat.clone(), mat] : mat);
+    if(pic) pic.then(c => { if(!alive || !c) return; const f = m.material[4]; f.map = new THREE.CanvasTexture(c); f.map.colorSpace = THREE.SRGBColorSpace; f.color.set(0xffffff); f.needsUpdate = true; });
+    if(p.model) model(p.model).then(src => {  // the phone app's model replaces the block once it has loaded
+      if(!alive) return;
+      const o = src.clone(true), bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3());
+      o.scale.set(w / sz.x, h / sz.y, d / sz.z);
+      const c0 = bb.getCenter(new THREE.Vector3());
+      o.position.set(-c0.x * w / sz.x, -c0.y * h / sz.y, -c0.z * d / sz.z);
+      o.traverse(n => { if(n.isMesh) n.material = Array.isArray(n.material) ? n.material.map(x => x.clone()) : n.material.clone(); });  // per instance
+      setFade(o, g.userData.fade ?? 1);  // a model that loads mid-fade joins the fade
+      g.remove(m); g.add(o);
+    }).catch(() => {});  // no model: the block stays
     const t = tag(p.label); t.position.set(0, h / 2 + 30, 20);
     t.visible = false;  // names show for what just changed, or on a tap, so they never cover the fridge
     g.add(m, t); g.position.copy(c); g.userData = {tag: t, level: p.level}; scene.add(g); things.push(g);
@@ -103,7 +123,7 @@ export function mount(host, twin, row, change = null){
     for(const m of moves){
       m.obj.position.lerpVectors(m.a, m.b, e);
       const o = m.fade === 1 ? e : m.fade === -1 ? 1 - e : 1;
-      m.obj.traverse(n => { if(n.material){ n.material.transparent = true; n.material.opacity = o; } });
+      m.obj.userData.fade = o; setFade(m.obj, o);
       if(m.fade === -1 && t >= 1 && m.obj.visible){ m.obj.visible = false; things.splice(things.indexOf(m.obj), 1); }
     }
   };
@@ -117,15 +137,21 @@ export function mount(host, twin, row, change = null){
     const r = ren.domElement.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), cam);
     const hit = firstShown(ray.intersectObjects(things, true));
-    if(hit){ const t = hit.object.parent.userData.tag; t.visible = !t.visible; }
+    let o = hit && hit.object; while(o && !o.userData.tag) o = o.parent;
+    if(o){ o.userData.tag.visible = !o.userData.tag.visible; }
   });
 
-  let alive = true;
   const fit = () => {  // a new size reframes the home view
     cam.aspect = host.clientWidth / host.clientHeight; cam.updateProjectionMatrix(); ctl.target.set(...frame()); ctl.update();
     ren.setSize(host.clientWidth, host.clientHeight);
   };
   const ro = new ResizeObserver(fit); ro.observe(host);
   (function loop(now){ if(!alive) return; if(moves.length) step(now ?? performance.now()); ctl.update(); ren.render(scene, cam); requestAnimationFrame(loop); })();
-  return {dispose(){ alive = false; ro.disconnect(); ctl.dispose(); ren.dispose(); ren.domElement.remove(); }};
+  // back to the home view (the whole fridge, or the shelf that just changed): the same framing as at the start
+  const reset = document.createElement("button");
+  reset.type = "button"; reset.className = "small"; reset.textContent = "Reset view";
+  reset.style.cssText = "position:absolute;right:8px;top:8px";
+  reset.onclick = () => { flying = false; ctl.target.set(...frame()); ctl.update(); };
+  host.style.position = "relative"; host.append(reset);
+  return {dispose(){ reset.remove(); alive = false; ro.disconnect(); ctl.dispose(); ren.dispose(); ren.domElement.remove(); }};
 }

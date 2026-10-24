@@ -63,3 +63,11 @@ def test_the_fridge_page_links_the_shelf_check_and_home():
     body = h.handler({"rawPath": "/fridge", "requestContext": {"http": {"method": "GET"}}})["body"]
     assert '<a href="shelf">Or check a single shelf photo</a>' in body
     assert '<a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>' in body
+
+
+def test_the_front_page_keeps_its_caveats():
+    """Codex v6 models R1 #3: the short copy must not overclaim what the rescan reads or what was measured."""
+    from service import handler as h
+    body = h.handler({"rawPath": "/", "requestContext": {"http": {"method": "GET"}}})["body"]
+    assert "only what moved" not in body and "spots that changed are read" not in body
+    assert "that setup was not part of the test" in body and "one recorded pair (a spot check)" in body

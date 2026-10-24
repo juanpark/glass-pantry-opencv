@@ -49,7 +49,7 @@ class S(BaseHTTPRequestHandler):
         for k, v in r["headers"].items():
             self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(r["body"].encode())
+        self.wfile.write(base64.b64decode(r["body"]) if r.get("isBase64Encoded") else r["body"].encode())
 
     def do_GET(self):
         self._go("GET")

@@ -144,3 +144,41 @@ test("a tap picks the first hit that is still shown, skipping faded-out things",
   assert.equal(firstShown(hits), hits[1]);
   assert.equal(firstShown([hits[0]]), undefined);
 });
+
+test("a reading matches the library by its longest word, ties on key; a match is drawn at the item's real size", async () => {
+  const {matchItem, sceneOf: draw} = await import("../../web/scene.js");
+  const lib = [{key: "coke_500", match: ["콜라", "코카콜라"], mm: [65, 220, 65]},
+               {key: "coke_1500", match: ["콜라 1.5", "콜라1.5"], mm: [90, 320, 90]},
+               {key: "ssamjang_450", match: ["쌈장"], mm: [120, 90, 90]}];
+  assert.equal(matchItem("코카콜라 1.5L", lib).key, "coke_1500");  // "콜라 1.5" is longer than "코카콜라"
+  assert.equal(matchItem("코카콜라", lib).key, "coke_500");
+  assert.equal(matchItem("순창 양념듬뿍 쌈장", lib).key, "ssamjang_450");
+  assert.equal(matchItem("흰 비닐봉지", lib), null);
+  const t = fresh(); const lid = Object.keys(t.levels)[0];
+  t.items[lid] = [{pid: "p1", label: "순창 양념듬뿍 쌈장", vessel: "tub", count: 1}, {pid: "p2", label: "흰 비닐봉지", count: 1}];
+  const items = draw(t, A, lib).parts.filter(p => p.kind === "item");
+  assert.equal(items[0].model, "ssamjang_450");
+  assert.deepEqual(items[0].box.slice(3).map(Math.round), [120, 90, 90]);
+  assert.equal(items[1].model, undefined);
+});
+
+test("a thing lower in its shelf photo stands further forward", () => {
+  const t = fresh(); const lid = Object.keys(t.levels)[0];
+  t.items[lid] = [{pid: "back", appearance: "x", xFrac: 0.3, yFrac: 0.5}, {pid: "front", appearance: "y", xFrac: 0.7, yFrac: 0.98}];
+  const [b, f] = sceneOf(t, A).parts.filter(p => p.kind === "item");
+  assert.ok(f.box[2] > b.box[2] + 50, [b.box[2], f.box[2]]);
+});
+
+test("a fade multiplies each material's own opacity, so see-through parts stay see-through and instances fade alone", async () => {
+  const {setFade} = await import("../../web/scene.js");
+  const mat = o => ({opacity: o, transparent: o < 1, userData: {}});
+  const a = {children: [{material: mat(0.1), children: []}, {material: [mat(1), mat(1)], children: []}]};
+  const b = {children: [{material: mat(0.1), children: []}]};
+  setFade(a, 1); setFade(b, 1);
+  assert.deepEqual([a.children[0].material.opacity, a.children[1].material[0].opacity], [0.1, 1]);
+  setFade(a, 0.5);
+  assert.ok(Math.abs(a.children[0].material.opacity - 0.05) < 1e-9 && a.children[1].material[1].opacity === 0.5);
+  assert.equal(b.children[0].material.opacity, 0.1);
+  setFade(a, 1);
+  assert.equal(a.children[0].material.opacity, 0.1);
+});

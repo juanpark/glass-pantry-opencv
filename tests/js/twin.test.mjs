@@ -375,3 +375,13 @@ test("band steps: a late answer ends only its own step; a stale step's answer is
   assert.equal(await b, null);
   assert.equal(s.cur, null);
 });
+
+test("photo faces are looked up per shelf: a shared photo id on two shelves keeps each shelf's own photo and box", () => {
+  const all = {"c/1": {twin: "t", photo: "A", items: [{pid: "s:1", box: [0, 0, 5, 5]}]},
+               "c/2": {twin: "t", photo: "B", items: [{pid: "s:1", box: [9, 9, 20, 20]}]},
+               "c/3": {twin: "other", photo: "C", items: [{pid: "s:9", box: [1, 1, 2, 2]}]}};
+  const f = T.facesOf(all, "t");
+  assert.deepEqual(f("c/1", "s:1"), {photo: "A", box: [0, 0, 5, 5]});
+  assert.deepEqual(f("c/2", "s:1"), {photo: "B", box: [9, 9, 20, 20]});
+  assert.equal(f("c/3", "s:9"), null);
+});
