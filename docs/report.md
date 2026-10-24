@@ -53,9 +53,10 @@ drawn through (crossed corners, a corner on the diagonal, under 5% of the photo)
 
 **Seeing the fridge in 3D (no model call).** The web 3D view (three.js) draws live compartment shelves and drawers and
 their things. A thing whose reading names a row of the phone app's item library (52 baked models, matched by the app's
-own rule: the longest match word wins) is drawn with that model at its catalogue size, scaled down only to fit its
-level; any other thing is a basic box or cylinder carrying its own crop from the shelf photo on the front. The shelf
-photo's item boxes guide horizontal position and size; depth comes from where the thing's foot stands in the photo,
+own rule: the longest match word wins) is drawn with that model, starting from its catalogue dimensions and scaled down uniformly to the renderer's limits
+(90% of the level's height, half its width, its depth); any other thing is a basic box or cylinder sized by its box in the
+shelf photo, wearing its own crop from that photo on the front when the shelf's last photo is kept (otherwise plain).
+A model that fails to load leaves its placeholder. The item boxes guide horizontal position; depth comes from where the thing's foot stands in the photo,
 and is approximate, not reconstructed or measured. Older rows without placement are spread evenly. After a confirmed
 *What changed?*, the view glides to that shelf and plays the change: gone things fade out, moved things slide, new
 things drop in. Door bins, retired levels and Unplaced things are not drawn in 3D.
@@ -118,9 +119,10 @@ place in the 3D view. It failed its pre-set bar (§6) and is labelled experiment
 
 ![Architecture: browser, AWS Lambda with OpenCV 5, Anthropic API](architecture/architecture.png)
 
-The browser holds the fridge (local storage, this device) and draws it. The picture shows all four routes: for
-scan, identify and straighten the Lambda container receives one photo per request, keeps it in memory only for that
-request, runs the OpenCV steps, and calls the Anthropic API. *What changed?* (`POST /rescan`) receives two photos (the
+The browser holds the fridge (local storage, this device) and draws it. The picture shows all four routes. For
+scan, identify and straighten the Lambda container receives one photo per request and keeps it in memory only for that
+request; scan and identify run their OpenCV steps and may call the Anthropic API, while straightening is OpenCV only,
+with no model call and no admission. *What changed?* (`POST /rescan`) receives two photos (the
 last confirmed one, kept in the browser, and the new one), also only in memory. Its first pass
 is OpenCV only, with no admission and no model call; the optional reading of the marked spots takes one admission,
 and only when a spot is actually read. A shelf scan or a

@@ -19,8 +19,10 @@ Pages: `/` the front page, `/fridge` the fridge, `/shelf` a single-shelf check w
 ## Run it
 
 ```
-uv sync                 # Python 3.12; pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4 (uv.lock)
-uv run pytest           # generated images and a fake model API only: no photos, no paid calls
+uv sync                                # Python 3.12; pinned: opencv-contrib-python-headless 5.0.0.93, numpy 2.3.4 (uv.lock)
+uv run python tools/fetch_models.py    # the two ONNX models for What changed? (SHA-1 checked; models/ is git-ignored)
+uv run pytest                          # generated images and a fake model API only: no photos, no paid calls
+node --test tests/js/*.test.mjs        # the page's rules (Node 20+)
 ```
 
 Real model runs need an Anthropic API key in `.env.local` (`ANTHROPIC_API_KEY=...`, git-ignored):
