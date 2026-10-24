@@ -139,8 +139,8 @@ with the first reading (`label_conflict:i11`), so the recommendation became **as
 ## 3a. Agent workflow: where OpenCV's output changes the next step
 
 The model only proposes. Each OpenCV measurement below decides what happens next: whether a model is called at all,
-which crops it sees, and what the person is asked. Every response carries its trace (each step, its time and its
-reasons) back to the page, and reasons only accumulate; nothing is filed or removed without the person.
+which crops it sees, and what the person is asked. A completed scan or rescan returns its trace (each step, its time
+and its reasons) to the page, and reasons only accumulate; nothing is filed or removed without the person.
 
 | OpenCV measurement | What it changes next | Where it is recorded |
 |---|---|---|
@@ -173,15 +173,18 @@ development Mac; between the photos one pack was taken out and one tub moved):
 | align | 3 472 | 157 matched points kept by the homography (inlier ratio 0.35, overlap 1.0) |
 | compare | 3 496 | 14 things: 7 no visible change (keep their reading, not read again), 6 possible change, 1 cannot compare |
 | new_regions | 3 523 | 2 spots that look new |
-| decide | 3 524 | *ask*, with **0 model calls**: 7 questions and 2 spots offered for reading |
+| decide | 3 524 | *ask*, with **0 model calls**: 7 questions, plus 8 candidate spots for optional reading (2 new, 6 changed); at most 6 crops can be read on a requested pass |
 
 Of the 6 possible changes, 2 are real (the pack that left; the tub that moved, which was flagged rather than
 recognised as moved, with its new place among the new spots) and 4 are false alarms of the kind measured in §6.
 
-**Human control and observability.** People confirm every list, answer every flag, choose whether marked spots are
-read, and tap Apply; gone things go to Unplaced, never deleted; Forget clears the device. The operator has an on/off
-switch (Parameter Store) and a shared daily cap that fails closed (DynamoDB). CloudWatch receives one JSON line per
-outcome with the engine version, route, result code and counts or timings, never photos, labels or model text.
+**Human control and observability.** People confirm every list. On a rescan they review the flags (each starts at
+"Still here"), mark what is gone, choose whether the marked spots are read, and confirm with Apply; only what they
+mark gone moves to Unplaced, never deleted. Forget removes this page's fridge and kept photos from the active store,
+with the device or tab scope described in §3. The operator has an on/off switch (Parameter Store) and a shared daily
+cap that fails closed (DynamoDB). Completed analyses and selected refusals and errors write one JSON line to CloudWatch
+with the engine version, route, result code and counts or timings, never photos, labels or model text; not every
+input-validation refusal is logged, so the logs are a summary, not a complete audit trail.
 
 ## 4. OpenCV 5 in the loop
 Pinned: `opencv-contrib-python-headless==5.0.0.93` (uv.lock).

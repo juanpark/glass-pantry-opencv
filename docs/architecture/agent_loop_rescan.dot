@@ -17,9 +17,9 @@ digraph rescan {
   moved   [label="moved on this shelf\n→ told; keeps its reading,\nnew place set on Apply", fillcolor="#e3f0eb"];
   ask     [label="possible change / can't compare\n→ a question: still here?", fillcolor="#fff4d6", color="#8a5a00"];
   offer   [label="spots that look new or changed\n→ offered for reading", fillcolor="#fff4d6", color="#8a5a00"];
-  person  [label="Person answers each question;\nmay ask for the marked spots to be read", fillcolor="#f6f3fb", color="#6b5a8a"];
+  person  [label="Person reviews the flags (each starts at \"Still here\"),\nmarks what is gone; may ask for the marked spots to be read", fillcolor="#f6f3fb", color="#6b5a8a"];
   read    [label="READ · Claude on the marked spots only\n(≤ 6 crops, 1 admission, only if asked)", fillcolor="#fbf1dc", color="#8a5a00"];
-  apply   [label="Apply: gone → Unplaced (never deleted),\nticked new things added, moved things re-placed;\nthe new photo becomes the last photo", fillcolor="#f6f3fb", color="#6b5a8a"];
+  apply   [label="Apply: what the person marked gone → Unplaced (never deleted),\nticked new things added, moved things re-placed;\nthe new photo becomes the last photo", fillcolor="#f6f3fb", color="#6b5a8a"];
 
   last -> align; photo -> gate;
   gate -> retake [label=" fails", color="#b0413e", fontcolor="#b0413e"];
