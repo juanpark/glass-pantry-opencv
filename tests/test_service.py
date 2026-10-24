@@ -202,3 +202,13 @@ def test_rescan_at_the_daily_limit_still_answers_with_the_region_unread(monkeypa
     old, new = _pair(add=True)
     s, b = call(ev("POST", "/rescan", _rescan_body(old, new, ITEMS), "application/json"), admitter=lambda: False)
     assert s == 200 and b["action"] == "ask" and b["new"][0]["unread"] == "daily_limit" and b["counted"] is False, b
+
+
+def test_rescan_without_reading_never_counts_or_calls_the_model(monkeypatch):
+    from verifier import claude
+    monkeypatch.setattr(claude.ClaudeProposer, "propose", lambda self, j: pytest.fail("read=false: no model call"))
+    old, new = _pair(add=True)
+    body = json.loads(_rescan_body(old, new, ITEMS)); body["read"] = False
+    s, b = call(ev("POST", "/rescan", json.dumps(body).encode(), "application/json"),
+                admitter=lambda: pytest.fail("nothing read, nothing counted"))
+    assert s == 200 and b["action"] == "ask" and b["model_calls"] == 0 and b["new"][0]["unread"] == "cap", b

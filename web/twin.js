@@ -135,6 +135,30 @@ export function addItems(twin, t, rows) {
   return {next};
 }
 
+/** The person says these things are no longer on the ticket's holder (after a rescan asked). They move to
+ * Unplaced with where they were; nothing is discarded. `pids` name things by the photo they were read from. */
+export function unplaceItems(twin, t, pids) {
+  const p = ticketProblem(twin, t);
+  if (p) return {error: p};
+  const want = new Set(pids);
+  const next = clone(twin);
+  const here = next.items[t.dest] || [];
+  const gone = here.filter(it => want.has(it.pid));
+  next.items[t.dest] = here.filter(it => !want.has(it.pid));
+  next.unplaced.push(...gone.map(it => ({...it, was: t.dest})));
+  return {next, moved: gone.length};
+}
+
+/** What a rescan of one holder compares against: its last photo (reduced) and where each thing stood in it.
+ * Kept beside the twin, never inside it; only things still on that holder, read from that photo, are sent. */
+export const RESCAN_KEY = "gp.rescan.v1";
+export function rescanItems(twin, rec) {
+  if (!rec || rec.twin !== twin.id || !isLive(twin, rec.level)) return [];
+  const pids = new Set((twin.items[rec.level] || []).map(it => it.pid).filter(Boolean));
+  return (rec.items || []).filter(it => pids.has(it.pid) && Array.isArray(it.box) && it.box.length === 4
+    && it.box.every(Number.isFinite) && it.box[2] > it.box[0] && it.box[3] > it.box[1]);
+}
+
 /** Move one Unplaced thing (with the person's edits) onto a live holder, in one change. */
 export function placeUnplaced(twin, index, dest, edits = {}) {
   if (!(index >= 0 && index < twin.unplaced.length)) return {error: "no_such_thing"};

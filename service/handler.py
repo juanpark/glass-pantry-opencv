@@ -136,7 +136,8 @@ def _items(v) -> list[dict] | None:
     return out
 
 
-def rescan_photos(old: bytes, items: list[dict], new: bytes, key, admitter, deadline: float | None = None) -> dict:
+def rescan_photos(old: bytes, items: list[dict], new: bytes, key, admitter, deadline: float | None = None,
+                  read: bool = True) -> dict:
     """OpenCV first (no model call, not counted); only when something new needs reading is one admission taken,
     which covers at most rescan.MAX_READS crop reads."""
     from verifier import claude, rescan
@@ -158,7 +159,7 @@ def rescan_photos(old: bytes, items: list[dict], new: bytes, key, admitter, dead
             Admitted.cost += p.raw.get("cost", 0)
             return p
 
-    res = rescan.run(old, items, new, Admitted())
+    res = rescan.run(old, items, new, Admitted(), max_reads=rescan.MAX_READS if read else 0)
     res.update(mode="LIVE", model_calls=Admitted.calls, cost_usd=round(Admitted.cost, 4), counted=Admitted.admitted)
     return res
 
@@ -303,6 +304,7 @@ def rescan_route(event, context, is_enabled, admitter, key, rescanner) -> dict:
         raw = event.get("body") or ""
         req = json.loads(base64.b64decode(raw) if event.get("isBase64Encoded") else raw)
         old, new, items = base64.b64decode(req["old"]), base64.b64decode(req["photo"]), _items(req.get("items"))
+        read = req.get("read", True) is True  # false: OpenCV only, no model call and nothing counted
     except Exception:
         return _resp(400, {"error": "bad_request"})
     from verifier.frames import decode
@@ -310,7 +312,7 @@ def rescan_route(event, context, is_enabled, admitter, key, rescanner) -> dict:
         return _resp(400, {"error": "bad_photo", "message": "That file is not a photo this page can read."})
     deadline = time.monotonic() + context.get_remaining_time_in_millis() / 1000 if context else None
     try:
-        res = rescanner(old, items, new, key, admitter, deadline=deadline)
+        res = rescanner(old, items, new, key, admitter, deadline=deadline, read=read)
     except Exception as e:  # never echo model text or photo data
         _log(route="rescan", result="error", kind=type(e).__name__, ms=round((time.time() - t0) * 1000))
         return _resp(502, {"error": "model_unavailable"})

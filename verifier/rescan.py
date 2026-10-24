@@ -16,12 +16,13 @@ Old item boxes are in the old photo's pixels; everything returned is in the new 
 
 import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 
 from . import change, decide, frames as frames_mod, gate
 
-MAX_READS = 3  # crops sent to the model per rescan; regions beyond it are reported unread
+MAX_READS = 6  # crops sent to the model per rescan (read side by side); spots beyond it are reported unread
 PAD = 0.15  # crop margin around a region, as a share of its larger side
 QUALITY = 92
 
@@ -71,31 +72,50 @@ def run(old_jpeg: bytes, old_items: list[dict], new_jpeg: bytes, proposer, max_r
     regions = change.new_regions(old, old_items, f.image, al, cmp["items"])
     step("new_regions", regions=regions)
 
-    # What to read: where an old item looks changed (it may be gone, or something else stands there now), then
-    # each new region. Unchanged and moved items keep their reading and are not read again.
-    spots = [o["box_now"] for o in cmp["items"] if o["outcome"] == change.CHANGED and o.get("box_now")] + regions
-    new = []
-    for i, r in enumerate(spots, 1):
-        if i > max_reads:
-            new.append({"region": i, "rect": r, "items": None})  # over the cap: shown, not read
-            continue
-        rect, crop = _crop(f.image, r)
-        try:
-            p = proposer.propose(crop)
-        except NotAdmitted as e:  # no model call allowed: this and later regions are shown unread
-            new += [{"region": j, "rect": rr, "items": None, "unread": str(e)} for j, rr in enumerate(spots[i - 1:], i)]
-            step("read_region", region=i, refused=str(e))
-            break
-        items = []
+    # What to read: each new region first (an added thing is only found by reading it), then where an old item
+    # looks changed (it may be gone, or something else stands there now). Unchanged and moved items keep their
+    # reading and are not read again. The first read takes the admission; the rest run side by side.
+    spots = [("new", r) for r in regions]
+    spots += [("changed", o["box_now"]) for o in cmp["items"] if o["outcome"] == change.CHANGED and o.get("box_now")]
+    known = [o["box_now"] for o in cmp["items"] if o["outcome"] in (change.SAME, change.MOVED) and o.get("box_now")]
+    new = [{"region": i, "kind": k, "rect": r, "items": None} for i, (k, r) in enumerate(spots, 1)]
+
+    def read(entry):
+        rect, crop = _crop(f.image, entry["rect"])
+        p = proposer.propose(crop)
+        items, hidden = [], 0
         for it in p.items:
             b = it.get("box")
             if isinstance(b, list) and len(b) == 4:
                 it = {**it, "box": [b[0] + rect[0], b[1] + rect[1], b[2] + rect[0], b[3] + rect[1]]}
-            items.append({**it, "id": f"new{i}.{it.get('id')}"})
-        new.append({"region": i, "rect": rect, "items": items, "raw": p.raw})
-        step("read_region", region=i, rect=rect, items=len(items), **{k: p.raw.get(k) for k in ("request_id", "cost")})
+                cx, cy = (it["box"][0] + it["box"][2]) / 2, (it["box"][1] + it["box"][3]) / 2
+                if any(k[0] <= cx <= k[2] and k[1] <= cy <= k[3] for k in known):
+                    hidden += 1  # a thing already accounted for (still there, or moved), seen at the crop's edge
+                    continue
+            items.append({**it, "id": f"new{entry['region']}.{it.get('id')}"})
+        entry.update(rect=rect, items=items, known_hidden=hidden, raw=p.raw)
+        return entry
+
+    todo = new[:max_reads]
+    try:
+        if todo:
+            read(todo[0])
+        if len(todo) > 1:
+            with ThreadPoolExecutor(max_workers=len(todo) - 1) as ex:
+                list(ex.map(read, todo[1:]))
+    except NotAdmitted as e:  # no model call allowed: nothing more is read
+        for n in new:
+            if n["items"] is None:
+                n["unread"] = str(e)
+        step("read_region", refused=str(e))
+    for n in new:
+        if n["items"] is not None:
+            step("read_region", region=n["region"], kind=n["kind"], rect=n["rect"], items=len(n["items"]),
+                 hidden=n["known_hidden"], **{k: n["raw"].get(k) for k in ("request_id", "cost")})
+        elif "unread" not in n:
+            n["unread"] = "cap"  # over the per-photo read cap: shown, not read
 
     why = [f"changed:{o['id']}" for o in cmp["items"] if o["outcome"] == change.CHANGED]
     why += [f"unclear:{o['id']}" for o in cmp["items"] if o["outcome"] == change.CANNOT]
-    why += [f"new:{n['region']}" for n in new[len(spots) - len(regions):]]
+    why += [f"new:{n['region']}" for n in new if n["kind"] == "new"]
     return done(decide.ASK if why else decide.FILE, why, cmp["items"], new)

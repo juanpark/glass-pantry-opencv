@@ -277,3 +277,34 @@ test("only a well-formed twin is accepted from storage", () => {
   assert.equal(bad(t => { t.v = 2; }), false);
   assert.equal(T.isTwin(null), false);
 });
+
+// rescan: an answer of "not here any more" moves things to Unplaced; the record only names things still there
+test("things the person says are gone move to Unplaced with where they were, nothing else changes", () => {
+  const row = {key: "k", version: 1, compartments: [{id: "c", levels: [{id: "c/1", kind: "shelf", top: 0, floor: 1}]}], panels: []};
+  let tw = T.newTwin(row, "sha", () => 0.5);
+  tw = T.addItems(tw, T.ticket(tw, "c/1"), [{appearance: "a", pid: "p:i1"}, {appearance: "b", pid: "p:i2"}]).next;
+  const r = T.unplaceItems(tw, T.ticket(tw, "c/1"), ["p:i2"]);
+  assert.equal(r.moved, 1);
+  assert.deepEqual(r.next.items["c/1"].map(i => i.pid), ["p:i1"]);
+  assert.deepEqual(r.next.unplaced.map(i => [i.pid, i.was]), [["p:i2", "c/1"]]);
+  assert.ok(T.isTwin(r.next));
+});
+
+test("a gone answer for a re-traced holder is refused", () => {
+  const row = {key: "k", version: 1, compartments: [{id: "c", levels: [{id: "c/1", kind: "shelf", top: 0, floor: 1}]}], panels: []};
+  let tw = T.newTwin(row, "sha", () => 0.5);
+  tw = T.addItems(tw, T.ticket(tw, "c/1"), [{appearance: "a", pid: "p:i1"}]).next;
+  const t = T.ticket(tw, "c/1");
+  tw = T.applyTrace(tw, "c", [0.5]).next;
+  assert.equal(T.unplaceItems(tw, t, ["p:i1"]).error, "layout_changed");
+});
+
+test("a rescan record sends only things still on that holder, with a usable box, for this fridge", () => {
+  const row = {key: "k", version: 1, compartments: [{id: "c", levels: [{id: "c/1", kind: "shelf", top: 0, floor: 1}]}], panels: []};
+  let tw = T.newTwin(row, "sha", () => 0.5);
+  tw = T.addItems(tw, T.ticket(tw, "c/1"), [{appearance: "a", pid: "p:i1"}, {appearance: "b", pid: "p:i2"}]).next;
+  const rec = {twin: tw.id, level: "c/1", items: [{pid: "p:i1", box: [1, 2, 3, 4]}, {pid: "p:i2", box: [5, 5, 5, 9]},
+                                                   {pid: "p:gone", box: [1, 1, 2, 2]}]};
+  assert.deepEqual(T.rescanItems(tw, rec).map(i => i.pid), ["p:i1"]);
+  assert.deepEqual(T.rescanItems(tw, {...rec, twin: "other"}), []);
+});
