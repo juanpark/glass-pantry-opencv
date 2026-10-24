@@ -246,3 +246,12 @@ def test_the_fridge_is_kept_on_this_device_and_can_be_forgotten():
     assert "window.localStorage" in p and "sessionStorage" not in p
     assert 'id="forget"' in p and "T.forget(" in p
     assert 'addEventListener("storage"' in p  # another tab's save pauses this one instead of overwriting it
+
+
+def test_only_the_writer_tab_saves_and_forget_stops_saving_first():
+    """Codex v6 keep R1: one writer tab (Web Locks); Forget pauses every save before deleting and reports a failure."""
+    p = _page()
+    assert "T.claimWriter(navigator.locks)" in p and "read-only" in p
+    fg = _body(p, '$("#forget").onclick = () => {', "\n  };")
+    assert fg.index("broken = true") < fg.index("T.forget(")
+    assert "location.reload()" in fg and "if(!r.ok)" in fg

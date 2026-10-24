@@ -356,7 +356,24 @@ export function facesOf(records, twinId) {
   };
 }
 
-/** Forget this page's fridge and kept photos on this device (both keys); other sites' and pages' data stay. */
+/** Forget this page's fridge and kept photos on this device (both keys); other sites' and pages' data stay.
+ * {ok} only when both keys are read back as absent; a refused or partial removal is {ok: false}. */
 export function forget(st) {
-  for (const k of [KEY, RESCAN_KEY]) st.removeItem(k);
+  try {
+    for (const k of [KEY, RESCAN_KEY]) { try { st.removeItem(k); } catch { /* checked below */ } }
+    return {ok: [KEY, RESCAN_KEY].every(k => st.getItem(k) === null)};
+  } catch { return {ok: false}; }
+}
+
+/** One tab writes the fridge at a time: hold the browser's lock for this page's lifetime when it is free. Resolves true
+ * for the writer, false when another tab holds it. Without Web Locks (old browsers) the tab writes, as before. */
+export function claimWriter(locks, name = "gp.fridge.writer") {
+  if (!locks || !locks.request) return Promise.resolve(true);
+  return new Promise(res => {
+    locks.request(name, {ifAvailable: true}, lock => {
+      if (!lock) { res(false); return null; }
+      res(true);
+      return new Promise(() => {});  // held until the tab closes
+    });
+  });
 }

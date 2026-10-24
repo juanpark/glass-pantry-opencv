@@ -392,3 +392,18 @@ test("forget removes this page's fridge and photos from the device, and nothing 
   T.forget(st);
   assert.deepEqual([...m.keys()], ["other.site"]);
 });
+
+test("forget says whether both keys are really gone; a refused or partial removal is not reported as done", () => {
+  const mk = (failOn) => { const m = new Map([[T.KEY, "x"], [T.RESCAN_KEY, "y"]]);
+    return {m, st: {removeItem: k => { if (k === failOn) throw new Error("denied"); m.delete(k); }, getItem: k => m.get(k) ?? null}}; };
+  assert.equal(T.forget(mk(null).st).ok, true);
+  for (const k of [T.KEY, T.RESCAN_KEY]) assert.equal(T.forget(mk(k).st).ok, false, k);
+  assert.equal(T.forget(null).ok, false);
+});
+
+test("only one tab may write: the writer lock is taken if free, refused if another tab holds it, assumed without Web Locks", async () => {
+  const locks = held => ({request: (name, opts, cb) => { assert.equal(opts.ifAvailable, true); const r = cb(held ? null : {name}); return Promise.resolve(r); }});
+  assert.equal(await T.claimWriter(locks(false)), true);
+  assert.equal(await T.claimWriter(locks(true)), false);
+  assert.equal(await T.claimWriter(undefined), true);
+});

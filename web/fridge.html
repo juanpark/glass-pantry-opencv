@@ -207,6 +207,7 @@ const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it
 let LAYOUTS = [], LAYOUT_SHA = "";
 let stale = null;    // a saved fridge made with other layout data: never reinterpreted, its things carried over
 let twin = null;     // the committed fridge; proposals live in `trace` and `fill` until the person confirms
+let writer = true;   // this tab holds the writer lock (T.claimWriter); a read-only tab never saves or forgets
 let broken = false;  // storage could not be verified: no further saves until the page is reloaded
 const ops = new T.Ops();  // every photo, straighten and scan reply must still be the latest of its kind
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -261,6 +262,11 @@ async function init(){
     for(const r of rs){ const o = document.createElement("option"); o.value = r.key; o.textContent = label(r); og.append(o); }
     sel.append(og);
   }
+  if(!await T.claimWriter(navigator.locks)){  // another tab of this page is the writer: show, never save
+    writer = false; broken = true;
+    $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
+    $("#modelNote").textContent = "Your fridge is open in another tab, so this one is read-only. Close the other tab and reload this one to make changes.";
+  }
   twin = load();
   let had = null; try{ had = store().getItem(T.KEY); }catch{}
   if(!twin && had){  // something is stored but it is not a fridge this page can read: say so, never draw from it
@@ -281,7 +287,13 @@ async function init(){
   $("#forget").onclick = () => {  // two taps, no browser dialog
     const b = $("#forget");
     if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap again to forget everything here"; return; }
-    try{ T.forget(store()); }catch{}
+    if(!writer){  // a read-only tab must not delete what the writer tab may save again
+      $("#saveState").textContent = "Forget from the tab where your fridge is open, or close the others and reload."; return;
+    }
+    broken = true;  // first: no save of any kind from here on, pending ones included
+    for(const k in recGen) recGen[k]++;
+    const r = T.forget(store());
+    if(!r.ok){ $("#saveState").textContent = "This browser did not let everything be forgotten. Try again, or clear this site's data in the browser settings."; return; }
     location.reload();
   };
   gate();
