@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Glass Pantry</title>
-<meta name="description" content="A fridge you can open on your phone, kept true by photos. Claude reads each shelf; OpenCV 5 checks the photos and the readings and decides what is looked at again; you confirm.">
+<meta name="description" content="Photograph a shelf again and OpenCV 5 shows what changed, before any AI is asked. A fridge you can open on your phone, kept true by photos.">
 <style>
-/* The front door: one story, then into the fridge. Same tokens as the other pages. */
+/* The front door: the moment first, one button, then the facts. Same tokens as the other pages. */
 :root{
   --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c;
   --ok:#2e8b57; --ask:#c77700; --bad:#c0392b; --info:#2f6fb3; --grey:#8a948e; --code:#eef1ee;
@@ -16,32 +16,29 @@
   --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8;
   --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
   padding:24px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
 main{max-width:980px;margin:0 auto;display:grid;gap:20px}
 h1{font-size:1.9rem;margin:0;letter-spacing:-.015em}
 h2{font-size:1.05rem;margin:0}
-p{margin:0;max-width:70ch}
-.lead{font-size:1.08rem}
+p{margin:0;max-width:68ch}
+.lead{font-size:1.12rem}
 .muted{color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
-.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
-.live{color:var(--ok)} .off{color:var(--grey)} .exp{color:var(--ask)}
-.btn{font:600 .95rem var(--sans);border-radius:6px;padding:11px 16px;border:1px solid var(--line);background:var(--panel);color:var(--fg);text-decoration:none;display:inline-block;min-height:44px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;counter-reset:s}
-.step{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
-.step h3{font-size:.98rem;margin:0;display:flex;gap:8px;align-items:baseline}
-.step h3::before{counter-increment:s;content:counter(s);font:700 .8rem var(--sans);color:#fff;background:var(--accent);
-  border-radius:99px;width:22px;height:22px;display:inline-grid;place-items:center;flex:none}
-dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:.88rem}
-dt{font:600 .7rem var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:3px}
-dd{margin:0;min-width:0}
-.idea{border-left:6px solid var(--accent);padding:10px 14px;border-radius:6px;background:var(--code)}
-ul.res{margin:0;padding-left:1.1rem;display:grid;gap:8px;max-width:75ch}
-.pass{color:var(--ok);font-weight:600} .fail{color:var(--bad);font-weight:600}
+.live{color:var(--ok)} .off{color:var(--grey)}
+.btn{font:600 1rem var(--sans);border-radius:6px;padding:12px 20px;text-decoration:none;display:inline-block;min-height:44px;
+  background:var(--accent);color:#fff;border:1px solid var(--accent)}
+.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#hero canvas{width:100%;height:auto;display:block;border-radius:6px;background:var(--code)}
+.say{font-weight:600}
+ol.steps{margin:0;padding-left:1.2rem;display:grid;gap:8px;max-width:72ch}
+ul.res{margin:0;padding-left:1.1rem;display:grid;gap:6px;max-width:72ch}
+.fail{color:var(--bad);font-weight:600}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:8px}
 footer{font-size:.84rem}
 </style>
 </head>
@@ -50,104 +47,67 @@ footer{font-size:.84rem}
   <header class="row" style="justify-content:space-between;align-items:flex-start">
     <div style="display:grid;gap:8px">
       <h1>Glass Pantry</h1>
-      <p class="lead">A fridge you can open on your phone, kept true by photos. You photograph each shelf, Claude reads
-        what is on it, and OpenCV&nbsp;5 checks the photos and the readings and decides what needs a second look. You confirm
-        everything. Next time you photograph a shelf, OpenCV compares it with the last photo, so the model is asked only about what may
-        have changed (experimental).</p>
+      <p class="lead">Photograph a shelf again, and OpenCV&nbsp;5 shows what changed before any AI is asked.
+        Your fridge stays true on your phone, and the AI reads only what moved.</p>
     </div>
     <span id="status" class="chip off">Checking…</span>
   </header>
 
+  <section class="card" id="hero" hidden>
+    <p class="say" id="heroSay"></p>
+    <canvas id="heroCv" aria-label="The last photo of a shelf above a new one, with lines joining the points OpenCV found in both"></canvas>
+    <p class="muted" style="font-size:.84rem">A real pair from our fridge, run through this engine. Each line joins a point
+      OpenCV&nbsp;5 found in both photos (ALIKED + LightGlue). Green: still there. Amber: not seen where it was, so you are
+      asked. Blue dashed: looks new.</p>
+  </section>
+
   <div class="row">
-    <a class="btn primary" href="fridge">Open the fridge</a>
-    <a class="btn" href="shelf">See one recorded shelf check</a>
+    <a class="btn" href="fridge">Try it on your fridge</a>
+    <a class="muted" href="shelf">No camera? See a recorded shelf check</a>
   </div>
 
   <section class="card">
-    <h2>The idea</h2>
-    <p class="idea"><b>The fridge on the screen is the record; photos keep it true.</b> A model reading a photo can be
-      confidently wrong, and reading every shelf again every time is slow and costly. So the model only proposes. OpenCV
-      supplies the evidence that decides the next step: send the photo back, ask you, or file. And when you come back,
-      OpenCV decides which spots are worth reading again.</p>
-  </section>
-
-  <section class="card">
     <h2>How it works</h2>
-    <div class="steps">
-      <div class="step">
-        <h3>Pick your fridge</h3>
-        <dl>
-          <dt>You</dt><dd>photograph the model sticker, or choose from the list</dd>
-          <dt>Claude</dt><dd>reads the model number</dd>
-          <dt>OpenCV</dt><dd>sends a blurry or smeared photo back before any model call</dd>
-        </dl>
-      </div>
-      <div class="step">
-        <h3>Trace each compartment</h3>
-        <dl>
-          <dt>You</dt><dd>drag the outline and the shelf lines onto a photo</dd>
-          <dt>OpenCV</dt><dd>straightens the opening to a front view, and refuses an outline it cannot straighten</dd>
-        </dl>
-      </div>
-      <div class="step">
-        <h3>Fill each shelf</h3>
-        <dl>
-          <dt>You</dt><dd>mark this shelf's top and bottom on the photo; confirm the list</dd>
-          <dt>Claude</dt><dd>lists what is on it</dd>
-          <dt>OpenCV</dt><dd>checks the photo and every shelf line, and has small labels read again up close; the result is file, ask you, or retake</dd>
-        </dl>
-      </div>
-      <div class="step">
-        <h3>Photograph it again</h3>
-        <span class="chip exp" style="justify-self:start">experimental</span>
-        <dl>
-          <dt>OpenCV</dt><dd>lines the new photo up with the last one (OpenCV&nbsp;5's learned matching, ALIKED + LightGlue) and says, for each thing: no visible change, possible change, moved, or cannot compare</dd>
-          <dt>Claude</dt><dd>reads only the marked spots, if you ask</dd>
-          <dt>You</dt><dd>apply: gone things go to Unplaced, never deleted</dd>
-        </dl>
-      </div>
-    </div>
+    <ol class="steps">
+      <li><b>Set up your fridge.</b> Pick the model (or photograph its sticker) and trace each compartment on a photo;
+        OpenCV straightens it.</li>
+      <li><b>Photograph each shelf.</b> Claude lists what is on it; OpenCV checks the photo and has small labels read again
+        up close. You confirm, and the shelf appears in a 3D fridge.</li>
+      <li><b>Photograph it again later.</b> OpenCV lines the new photo up with the last one and checks each thing, with no
+        AI. Only the spots that changed are read by Claude. Gone things move to Unplaced, never deleted.</li>
+    </ol>
   </section>
 
   <section class="card">
     <h2>What we measured</h2>
-    <p class="muted">Each bar was written down before the test photos were looked at. One kitchen, few photos: these show
-      behaviour, not general accuracy.</p>
     <ul class="res">
-      <li><b>Photograph it again</b> (6 new before/after pairs): every removal, the moved item and the added item were
-        found. It still <span class="fail">failed</span> its bar on false alarms: 8 things that had not changed were asked
-        about (bar: at most 1 per pair) and 7 spots were wrongly marked as new. Classic SIFT matching under the same
-        rules: 38 and 12. So it is labelled experimental, and the shelf-strip setup the page now uses was not part of
-        the test.</li>
-      <li><b>Second looks at small labels</b> (12 scans of new photos, 28 scored readings): no first reading was wrong,
-        so there was nothing to catch; 2 questions were raised for nothing. <b>No accuracy gain is claimed.</b></li>
-      <li><b>Suggested corners and snapping edges</b>: <span class="fail">failed</span> their bar and are switched off; you
-        place the corners and lines.</li>
-      <li><b>Speed on AWS</b>, comparing two photos, OpenCV only: <span class="pass">4.4 s</span>, 9.0 s on the first call
-        (one pair, a spot check).</li>
+      <li><b>Photograph it again</b>, 6 before/after pairs: every removal, the move and the addition were found, but it
+        <span class="fail">failed</span> its bar on false alarms (8 unchanged things asked about; classic SIFT: 38). So it
+        is marked experimental.</li>
+      <li><b>Second looks at small labels:</b> no wrong first reading to catch in 28; no accuracy gain claimed.</li>
+      <li><b>Speed on AWS</b>, comparing two photos: 4.4 s (9.0 s on the first call).</li>
     </ul>
+    <p class="muted" style="font-size:.84rem">One kitchen and few photos: these show behaviour, not general accuracy.</p>
   </section>
 
-  <section class="card">
-    <h2>Before you try it</h2>
+  <details class="card">
+    <summary>Before you try it: where your photos go</summary>
     <ul class="res">
-      <li>Photos you send are processed by this engine on AWS, in memory, without being intentionally kept; it logs only
-        codes and counts. When a model reading is made (a shelf, the fridge's sticker, or the marked spots you ask to be
-        read), that photo or those crops also go to Anthropic's Claude model; this page does not set Anthropic's
-        retention policy. Tracing an outline and the first comparison of two photos use AWS only. Leave people and
-        personal documents out of the frame.</li>
-      <li>Your fridge is kept in this browser tab only.</li>
-      <li>Reading photos is capped per day for everyone together, so live reading can run out; the recorded shelf
-        check always works.</li>
+      <li>Photos are processed by this engine on AWS, in memory, without being intentionally kept; it logs only codes
+        and counts. A photo or crop that Claude reads also goes to Anthropic. Tracing and comparing two photos use AWS
+        only. Leave people and personal documents out of the frame.</li>
+      <li>Your fridge is kept in this browser tab only; closing the tab forgets it.</li>
+      <li>Live reading is capped per day for everyone together; the recorded shelf check always works.</li>
     </ul>
-  </section>
+  </details>
 
   <footer class="muted">
     <p>A web prototype for the OpenCV AI Competition 2026, following the workflow of our phone app, Glass Pantry
-      (in TestFlight testing). The OpenCV checks shown here are not in the phone app.</p>
+      (in TestFlight testing), and drawn with its item models. The OpenCV checks shown here are not in the phone app.</p>
   </footer>
 </main>
-<script>
+<script type="module">
+import {draw, summary} from "./compare.js";
 (async () => {
   const s = document.getElementById("status");
   try{
@@ -155,6 +115,23 @@ footer{font-size:.84rem}
     s.textContent = h.live ? "Live reading on" : "Live reading paused";
     s.className = "chip " + (h.live ? "live" : "off");
   }catch{ s.textContent = "Offline"; }
+})();
+// the moment, on a loop: a recorded pair and the engine's answer for it (no model call); hidden when absent
+(async () => {
+  try{
+    const d = await (await fetch("samples/change/change.json")).json();
+    const load = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+    const [o, n] = await Promise.all([load("samples/change/before.jpg"), load("samples/change/after.jpg")]);
+    const cv = document.getElementById("heroCv"); cv.width = 1200;
+    document.getElementById("heroSay").textContent = summary(d.res);
+    document.getElementById("hero").hidden = false;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches, LOOP = 6000, PLAY = 2600;
+    const t0 = performance.now();
+    (function frame(now){
+      draw(cv, o, n, d.res, d.items, still ? 1 : Math.min(1, (now - t0) % LOOP / PLAY));
+      if(!still) requestAnimationFrame(frame);
+    })(t0);
+  }catch{ /* no recorded pair: the page reads fine without it */ }
 })();
 </script>
 </body>

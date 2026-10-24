@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ITEM_GLB = re.compile(r"/items/item-[a-z0-9_]+\.glb")
+CHANGE_SAMPLE = {f"/samples/change/{n}" for n in ("change.json", "before.jpg", "after.jpg")}
 MAX_BYTES = 5_500_000  # Function URL requests stop at 6 MB, base64 included
 DAILY_SCANS = int(os.environ.get("DAILY_SCANS", "40"))
 TABLE = os.environ.get("TABLE", "glass-pantry-opencv-calls")
@@ -373,6 +374,11 @@ def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabl
         return _resp(200, (ROOT / "web" / "twin.js").read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
     if method == "GET" and path in ("/scene.js", "/twin3d.js", "/compare.js"):
         return _resp(200, (ROOT / "web" / path[1:]).read_text(encoding="utf-8"), "text/javascript; charset=utf-8")
+    if method == "GET" and path in CHANGE_SAMPLE and (ROOT / "web" / path[1:]).is_file():  # the front page's recorded pair
+        f = ROOT / "web" / path[1:]
+        if f.suffix == ".json":
+            return _resp(200, f.read_text(encoding="utf-8"), "application/json; charset=utf-8")
+        return {**_resp(200, base64.b64encode(f.read_bytes()).decode(), "image/jpeg"), "isBase64Encoded": True}
     if method == "GET" and path == "/items/items.json":
         return _resp(200, (ROOT / "web" / "items" / "items.json").read_text(encoding="utf-8"), "application/json; charset=utf-8")
     if method == "GET" and ITEM_GLB.fullmatch(path) and (ROOT / "web" / path[1:]).is_file():  # the phone app's models
