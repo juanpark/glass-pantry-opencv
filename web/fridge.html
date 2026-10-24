@@ -82,7 +82,9 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
 
   <section class="card">
     <h2>Before you start</h2>
-    <p>Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Your photos are not kept on the server; your fridge is kept in this browser tab only. Leave people, documents and anything personal out of the frame.</p>
+    <p>Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Your photos are not kept on the server. Your fridge, and the last photo of each shelf, are kept in this browser on this device until you forget them, so you can come back and photograph a shelf again. Anyone using this browser can see them. Leave people, documents and anything personal out of the frame.</p>
+    <p class="row"><button id="forget" type="button" class="small">Forget my fridge and photos on this device</button></p>
+    <p id="keepNote" class="note bad" hidden></p>
     <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send photos.</span></label>
     <p class="muted"><a href="shelf">Or check a single shelf photo</a></p>
   </section>
@@ -206,12 +208,16 @@ const SNAP = 0.015;  // a dropped line within this of an OpenCV edge lands on it
 let LAYOUTS = [], LAYOUT_SHA = "";
 let stale = null;    // a saved fridge made with other layout data: never reinterpreted, its things carried over
 let twin = null;     // the committed fridge; proposals live in `trace` and `fill` until the person confirms
+let mode = null;     // "writer" | "held" (read-only) | "none" (tab only): decided by the lock before loading
+let ready = false;   // the saved fridge has been loaded; nothing is written before this
 let broken = false;  // storage could not be verified: no further saves until the page is reloaded
 const ops = new T.Ops();  // every photo, straighten and scan reply must still be the latest of its kind
 const clone = o => JSON.parse(JSON.stringify(o));
 
 // ---------- storage: a save is believed only after it is read back (twin.js commit) ----------
-function store(){ try{ return window.sessionStorage; }catch{ return null; } }
+// this browser on this device (one writer tab, T.claimWriter); without Web Locks, this tab only. Never stored on the server.
+function store(){ try{ return mode === "none" ? window.sessionStorage : mode ? window.localStorage : null; }catch{ return null; } }
+const canWrite = () => ready && (mode === "writer" || mode === "none") && !broken;
 function load(){
   try{
     const t = JSON.parse(store().getItem(T.KEY) || "null");
@@ -220,13 +226,13 @@ function load(){
 }
 function commit(next, note){  // `note`: the card the person is using, so a refused save is said where they look
   const say = (t, failed = true) => { $("#saveState").textContent = t; if(failed && note) note(t, "bad"); };
-  if(broken){ say("Saving is paused: this tab could not confirm what it stored. Reload the page to check your fridge."); return false; }
+  if(!canWrite()){ say(mode === "held" ? "Read-only: your fridge is open in another tab." : !ready ? "Still loading your fridge; try again in a moment." : "Saving is paused: this page could not confirm what is stored. Reload the page to check your fridge."); return false; }
   const st = store();
   const r = st ? T.commit(st, T.KEY, next) : {ok:false, durable:"unchanged"};
-  if(r.ok){ twin = next; say("Saved in this tab.", false); return true; }
+  if(r.ok){ twin = next; say("Saved on this device.", false); return true; }
   if(r.durable === "unknown"){
     broken = true;
-    say("Not saved, and this tab could not confirm what it stored. Saving is paused; reload the page to check your fridge.");
+    say("Not saved, and this page could not confirm what is stored. Saving is paused; reload the page to check your fridge.");
   }else say("Not saved: this browser refused to store it (private mode or full). Your last saved fridge is unchanged.");
   return false;
 }
@@ -260,11 +266,24 @@ async function init(){
     for(const r of rs){ const o = document.createElement("option"); o.value = r.key; o.textContent = label(r); og.append(o); }
     sel.append(og);
   }
+  const m = await T.claimWriter(navigator.locks);  // decided before anything is loaded or saved
+  if(m === "held"){  // another tab of this page is the writer: show, never save
+    $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
+    $("#modelNote").textContent = "Your fridge is open in another tab, so this one is read-only. Close the other tab and reload this one to make changes.";
+  }else if(m === "none"){
+    $("#modelNote").hidden = false; $("#modelNote").className = "note";
+    $("#modelNote").textContent = "This browser keeps your fridge in this tab only; closing it forgets it.";
+    $("#forget").textContent = "Forget my fridge in this tab";
+    let earlier = false; try{ earlier = [T.KEY, T.RESCAN_KEY].some(k => window.localStorage.getItem(k) !== null); }catch{}
+    if(earlier){ $("#keepNote").hidden = false; $("#keepNote").textContent = "A fridge saved earlier on this device is still kept "
+      + "and is not shown or deleted here; to delete it, clear this site's data in your browser settings."; }
+  }
+  mode = m;  // store() now knows where the fridge lives; canWrite() stays false until `ready`
   twin = load();
   let had = null; try{ had = store().getItem(T.KEY); }catch{}
   if(!twin && had){  // something is stored but it is not a fridge this page can read: say so, never draw from it
     $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
-    $("#modelNote").textContent = "The fridge saved in this tab could not be read. Pick a fridge to start again.";
+    $("#modelNote").textContent = "The fridge saved on this device could not be read. Pick a fridge to start again.";
   }
   if(twin && (!row(twin.key) || twin.layouts !== LAYOUT_SHA)){  // never reinterpret a saved fridge under other data
     $("#modelNote").hidden = false; $("#modelNote").className = "note bad";
@@ -272,6 +291,24 @@ async function init(){
     stale = twin; twin = null;
   }
   $("#consent").addEventListener("change", gate);  // consent works whatever happens to the drawing
+  // another tab of this page saved: pause here instead of overwriting it with an older fridge
+  window.addEventListener("storage", e => {
+    if(e.key !== T.KEY && e.key !== T.RESCAN_KEY && e.key !== null) return;
+    broken = true; $("#saveState").textContent = "Changed in another tab. Reload this page to continue.";
+  });
+  $("#forget").onclick = () => {  // two taps, no browser dialog
+    const b = $("#forget");
+    if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = mode === "none" ? "Tap again to forget this tab's fridge" : "Tap again to forget everything on this device"; return; }
+    if(!canWrite() && b.dataset.failed !== "1"){  // a read-only or still-loading tab must not delete what the writer tab may save
+      $("#saveState").textContent = "Forget from the tab where your fridge is open, or close the others and reload."; return;
+    }
+    broken = true;  // first: no save of any kind from here on, pending ones included
+    for(const k in recGen) recGen[k]++;
+    const r = T.forget(store());
+    if(!r.ok){ b.dataset.failed = "1"; $("#saveState").textContent = "This browser did not let everything be forgotten. Try again, or clear this site's data in the browser settings."; return; }
+    location.reload();
+  };
+  ready = true;  // loaded: from here on this tab may save, if it is the writer
   gate();
   if(twin){ sel.value = twin.key; render(); }
 }
@@ -359,7 +396,7 @@ function count(id){ return (twin.items[id] || []).length; }
 let libP = null;  // the phone app's item library (models + match words); without it, things are drawn as blocks
 const itemLib = () => libP ||= fetch("items/items.json").then(r => r.ok ? r.json() : {items: []}).then(j => j.items).catch(() => (libP = null, []));
 let view3d = null, view3dGen = 0;
-function photoFace(){  // (level, pid) -> Promise of a canvas: that thing cut from the last photo of its shelf (in this tab)
+function photoFace(){  // (level, pid) -> Promise of a canvas: that thing cut from the last photo of its shelf (on this device)
   const find = T.facesOf(rescanAll(), twin.id), imgs = new Map();
   return (level, pid) => {
     const w = find(level, pid); if(!w) return null;
@@ -930,7 +967,7 @@ async function saveRescan(owner, blob, size, items, bandLines){  // best effort:
     const rec = {twin:owner.twin, level, rev:owner.rev, band:bandLines || null, size:[img.naturalWidth, img.naturalHeight], photo:await b64(small),
                  items:items.filter(i => Array.isArray(i.box)).map(i => ({pid:i.pid, box:i.box.map(v => v * k)}))};
     // a fridge switch, a re-trace or a newer confirmed photo while this one was prepared: this one is not kept
-    if(recGen[level] !== gen || !T.ownerStill(twin, owner)) return;
+    if(recGen[level] !== gen || !T.ownerStill(twin, owner) || !canWrite()) return;  // read-only, paused or forgotten: not kept
     const all = rescanAll(); all[level] = rec;
     store().setItem(T.RESCAN_KEY, JSON.stringify(all));
   }catch{ /* storage full or refused: the shelf can still be photographed in full */ }

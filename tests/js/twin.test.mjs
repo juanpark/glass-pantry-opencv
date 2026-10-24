@@ -385,3 +385,28 @@ test("photo faces are looked up per shelf: a shared photo id on two shelves keep
   assert.deepEqual(f("c/2", "s:1"), {photo: "B", box: [9, 9, 20, 20]});
   assert.equal(f("c/3", "s:9"), null);
 });
+
+test("forget removes this page's fridge and photos from the device, and nothing else", () => {
+  const m = new Map([[T.KEY, "x"], [T.RESCAN_KEY, "y"], ["other.site", "z"]]);
+  const st = {removeItem: k => m.delete(k), getItem: k => m.get(k) ?? null};
+  T.forget(st);
+  assert.deepEqual([...m.keys()], ["other.site"]);
+});
+
+test("forget says whether both keys are really gone; a refused or partial removal is not reported as done", () => {
+  const mk = (failOn) => { const m = new Map([[T.KEY, "x"], [T.RESCAN_KEY, "y"]]);
+    return {m, st: {removeItem: k => { if (k === failOn) throw new Error("denied"); m.delete(k); }, getItem: k => m.get(k) ?? null}}; };
+  assert.equal(T.forget(mk(null).st).ok, true);
+  for (const k of [T.KEY, T.RESCAN_KEY]) assert.equal(T.forget(mk(k).st).ok, false, k);
+  assert.equal(T.forget(null).ok, false);
+});
+
+test("only one tab may write: the lock decides writer, held elsewhere, or no lock (tab-only); a rejected request is no lock", async () => {
+  const later = v => new Promise(r => setTimeout(() => r(v), 20));
+  const locks = held => ({request: (name, opts, cb) => { assert.equal(opts.ifAvailable, true); return later().then(() => cb(held ? null : {name})); }});
+  assert.equal(await T.claimWriter(locks(false)), "writer");
+  assert.equal(await T.claimWriter(locks(true)), "held");
+  assert.equal(await T.claimWriter(undefined), "none");
+  assert.equal(await T.claimWriter({request: () => Promise.reject(new Error("SecurityError"))}), "none");
+  assert.equal(await T.claimWriter({request: () => { throw new Error("sync"); }}), "none");
+});
