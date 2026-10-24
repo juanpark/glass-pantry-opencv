@@ -243,7 +243,8 @@ def test_the_phone_apps_item_models_are_served_and_nothing_else_under_items():
 def test_the_fridge_is_kept_on_this_device_and_can_be_forgotten():
     """Juan 10/24: remember the fridge across visits (this browser only), with a way to forget it."""
     p = _page()
-    assert "window.localStorage" in p and "sessionStorage" not in p
+    # on this device with the writer lock; tab-only (sessionStorage) only where Web Locks are missing (Codex keep R2)
+    assert "window.localStorage" in p and 'mode === "none" ? window.sessionStorage' in p
     assert 'id="forget"' in p and "T.forget(" in p
     assert 'addEventListener("storage"' in p  # another tab's save pauses this one instead of overwriting it
 
@@ -251,7 +252,11 @@ def test_the_fridge_is_kept_on_this_device_and_can_be_forgotten():
 def test_only_the_writer_tab_saves_and_forget_stops_saving_first():
     """Codex v6 keep R1: one writer tab (Web Locks); Forget pauses every save before deleting and reports a failure."""
     p = _page()
-    assert "T.claimWriter(navigator.locks)" in p and "read-only" in p
+    assert "const m = await T.claimWriter(navigator.locks)" in p and "read-only" in p and "ready = true;" in p
+    assert "let mode = null;" in p  # nothing is writable until the lock is decided and the saved fridge is loaded
+    cm = _body(p, "function commit(next, note){", "\n}")
+    assert "!canWrite()" in cm
+    assert "canWrite()" in _body(p, "async function saveRescan(", "\n}")
     fg = _body(p, '$("#forget").onclick = () => {', "\n  };")
     assert fg.index("broken = true") < fg.index("T.forget(")
     assert "location.reload()" in fg and "if(!r.ok)" in fg

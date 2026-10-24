@@ -401,9 +401,12 @@ test("forget says whether both keys are really gone; a refused or partial remova
   assert.equal(T.forget(null).ok, false);
 });
 
-test("only one tab may write: the writer lock is taken if free, refused if another tab holds it, assumed without Web Locks", async () => {
-  const locks = held => ({request: (name, opts, cb) => { assert.equal(opts.ifAvailable, true); const r = cb(held ? null : {name}); return Promise.resolve(r); }});
-  assert.equal(await T.claimWriter(locks(false)), true);
-  assert.equal(await T.claimWriter(locks(true)), false);
-  assert.equal(await T.claimWriter(undefined), true);
+test("only one tab may write: the lock decides writer, held elsewhere, or no lock (tab-only); a rejected request is no lock", async () => {
+  const later = v => new Promise(r => setTimeout(() => r(v), 20));
+  const locks = held => ({request: (name, opts, cb) => { assert.equal(opts.ifAvailable, true); return later().then(() => cb(held ? null : {name})); }});
+  assert.equal(await T.claimWriter(locks(false)), "writer");
+  assert.equal(await T.claimWriter(locks(true)), "held");
+  assert.equal(await T.claimWriter(undefined), "none");
+  assert.equal(await T.claimWriter({request: () => Promise.reject(new Error("SecurityError"))}), "none");
+  assert.equal(await T.claimWriter({request: () => { throw new Error("sync"); }}), "none");
 });

@@ -365,15 +365,18 @@ export function forget(st) {
   } catch { return {ok: false}; }
 }
 
-/** One tab writes the fridge at a time: hold the browser's lock for this page's lifetime when it is free. Resolves true
- * for the writer, false when another tab holds it. Without Web Locks (old browsers) the tab writes, as before. */
+/** One tab writes the fridge at a time: hold the browser's lock for this page's lifetime when it is free.
+ * "writer": this tab holds it; "held": another tab does (read-only here); "none": no usable Web Locks, so the page
+ * keeps the fridge in this tab only, where no other tab can write. */
 export function claimWriter(locks, name = "gp.fridge.writer") {
-  if (!locks || !locks.request) return Promise.resolve(true);
+  if (!locks || typeof locks.request !== "function") return Promise.resolve("none");
   return new Promise(res => {
-    locks.request(name, {ifAvailable: true}, lock => {
-      if (!lock) { res(false); return null; }
-      res(true);
-      return new Promise(() => {});  // held until the tab closes
-    });
+    try {
+      Promise.resolve(locks.request(name, {ifAvailable: true}, lock => {
+        if (!lock) { res("held"); return null; }
+        res("writer");
+        return new Promise(() => {});  // held until the tab closes
+      })).catch(() => res("none"));
+    } catch { res("none"); }
   });
 }
