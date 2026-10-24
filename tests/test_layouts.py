@@ -56,3 +56,10 @@ def test_the_front_door_leads_to_the_fridge_and_the_shelf_check():
     home, shelf = get("/"), get("/shelf")
     assert home["statusCode"] == 200 and 'href="fridge"' in home["body"] and 'href="shelf"' in home["body"]
     assert shelf["statusCode"] == 200 and "Glass Pantry Shelf Check" in shelf["body"]
+
+
+def test_the_fridge_page_links_the_shelf_check_and_home():
+    from service import handler as h
+    body = h.handler({"rawPath": "/fridge", "requestContext": {"http": {"method": "GET"}}})["body"]
+    assert '<a href="shelf">Or check a single shelf photo</a>' in body
+    assert '<a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>' in body
