@@ -148,7 +148,8 @@ def _pair(add=False):
     old = shelf(seed=3)
     new, _ = reshoot(old)
     if add:
-        cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+        from tests.test_change import add_object
+        add_object(new, 1150, 140, 1400, 260)
     return old, new
 
 

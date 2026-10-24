@@ -6,7 +6,8 @@ PAIRS.json: [{"name", "before", "after", "scan", "removed": [item ids], "added":
 canonical px]}]. Paths are relative to the file. "scan" is a recorded result of the live engine on the before photo
 (its proposal's item boxes are the old boxes, no hand edits); when it does not exist yet, one Claude scan is made
 and saved there (needs ANTHROPIC_API_KEY). Writes OUT_DIR/results.json, a table on stdout, and per pair and method
-an overlay of the after photo: green no visible change, red possible change, grey cannot compare, blue new.
+an overlay of the after photo: green no visible change, red possible change, magenta moved, grey cannot
+compare, blue new.
 Photos and outputs stay local.
 """
 
@@ -21,7 +22,8 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from verifier import change, frames  # noqa: E402
 
-COLOUR = {change.SAME: (60, 200, 60), change.CHANGED: (0, 0, 255), change.CANNOT: (160, 160, 160)}
+COLOUR = {change.SAME: (60, 200, 60), change.CHANGED: (0, 0, 255), change.CANNOT: (160, 160, 160),
+          change.MOVED: (255, 0, 255)}
 
 
 def old_items(scan_path: Path, before_jpeg: bytes) -> list[dict]:
@@ -48,9 +50,9 @@ def score(p: dict, r: dict, regions: list, al) -> dict:
     stayed = [i for i in by if i not in removed]
     return {
         "aligned": al.ok,
-        "removed_flagged": sum(by.get(i) in (change.CHANGED, change.CANNOT) for i in removed),
+        "removed_flagged": sum(by.get(i) in (change.CHANGED, change.CANNOT, change.MOVED) for i in removed),
         "removed": len(removed),
-        "false_flags": sum(by[i] == change.CHANGED for i in stayed),
+        "false_flags": sum(by[i] in (change.CHANGED, change.MOVED) for i in stayed),
         "added_found": sum(any(overlaps(a, g) for g in regions) for a in added),
         "added": len(added),
         "false_new": sum(not any(overlaps(g, a) for a in added) for g in regions),

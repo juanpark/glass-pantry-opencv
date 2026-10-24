@@ -17,7 +17,7 @@ different depths, so parallax is expected and the thresholds are deliberately lo
 """
 
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
@@ -33,8 +33,20 @@ MIN_OVERLAP = 0.6  # share of the old photo that lands inside the new one
 SAME_ZNCC = 0.55
 CHANGED_ZNCC = 0.30
 LONG = 1024  # alignment works on a reduced copy
-CELL = 32  # px of the reduced copy: the grid new_regions compares on
-MIN_NEW_CELLS = 3  # a "something new" region is at least this many touching cells
+MOVED = "moved"
+# Per item, from the matches themselves (a handheld move shifts things at different depths differently, so one
+# photo-wide warp cannot judge every item; the item's own matched points can).
+MIN_KP = 8  # old keypoints inside a box below this: too plain to judge by matches, gradient correlation decides
+MIN_LOCAL = 6  # matched points agreeing on one local move (RANSAC, similarity) to call the item present
+SUPPORT = 0.15  # ... and at least this share of the box's old keypoints
+LOCAL_TOL = 0.02  # RANSAC tolerance, share of the photo's long side
+MOVED_BY = 0.5  # present, but this many box sizes away from where the shelf-wide fit puts it: moved
+GRID = 24  # new_regions: cells across the photo's long side
+NEW_UNMATCHED = 3  # a cell is "new" with at least this many unmatched new keypoints ...
+NEW_RATIO = 2.0  # ... and this many times more unmatched than matched ones
+MIN_NEW_CELLS = 3  # touching cells a region needs
+SEARCH = 0.08  # a candidate is looked for in the old photo this far (share of the long side) around where it maps
+SEEN_BEFORE = 0.6  # ... and is not new when it is found there at least this well (normalised correlation)
 MODELS = Path(os.environ.get("GP_MODELS", Path(__file__).resolve().parent.parent / "models"))
 
 
@@ -47,9 +59,14 @@ class Alignment:
     overlap: float
     why: str = ""
     method: str = ""
+    # The evidence the per-item step uses (full-size px); not serialised. pts_*: every keypoint; m_*: matched pairs.
+    pts_old: np.ndarray | None = field(default=None, repr=False, compare=False)
+    pts_new: np.ndarray | None = field(default=None, repr=False, compare=False)
+    m_old: np.ndarray | None = field(default=None, repr=False, compare=False)
+    m_new: np.ndarray | None = field(default=None, repr=False, compare=False)
 
     def to_dict(self):
-        return asdict(self)
+        return {k: getattr(self, k) for k in ("ok", "H", "inliers", "ratio", "overlap", "why", "method")}
 
 
 def _grey_small(img):
@@ -109,7 +126,8 @@ def align(old: np.ndarray, new: np.ndarray, method: str = "learned") -> Alignmen
     overlap = float(poly.sum()) / (w * h)
     ok = inl >= MIN_INLIERS and ratio >= MIN_INLIER_RATIO and overlap >= MIN_OVERLAP and np.isfinite(H).all()
     why = "" if ok else ("few_inliers" if inl < MIN_INLIERS or ratio < MIN_INLIER_RATIO else "small_overlap")
-    return Alignment(bool(ok), H.tolist(), inl, round(ratio, 3), round(min(overlap, 1.0), 3), why, method)
+    return Alignment(bool(ok), H.tolist(), inl, round(ratio, 3), round(min(overlap, 1.0), 3), why, method,
+                     np.float32([k.pt for k in ka]) / sa, np.float32([k.pt for k in kb]) / sb, pa, pb)
 
 
 def _grad(img):
@@ -124,73 +142,133 @@ def _zncc(a, b) -> float:
     return float((a * b).sum() / d) if d > 1e-6 else 0.0
 
 
+def _inside(pts, box):
+    x0, y0, x1, y1 = box
+    return (pts[:, 0] >= x0) & (pts[:, 0] <= x1) & (pts[:, 1] >= y0) & (pts[:, 1] <= y1)
+
+
+def _project(box, H):
+    x0, y0, x1, y1 = box
+    return cv2.perspectiveTransform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), H).reshape(-1, 2)
+
+
+def _clip(pts, w, h):
+    bx0, by0 = np.floor(pts.min(0)).astype(int)
+    bx1, by1 = np.ceil(pts.max(0)).astype(int)
+    return [int(max(bx0, 0)), int(max(by0, 0)), int(min(bx1, w)), int(min(by1, h))]
+
+
 def compare(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignment) -> dict:
-    """Per confirmed item (boxes in old-photo px): where it should be now, and whether it still looks the same."""
+    """Per confirmed item (boxes in old-photo px): present where the shelf-wide fit puts it (no visible change),
+    present elsewhere (moved), not found (possible change), or cannot compare. Presence is decided by the item's
+    own matched points agreeing on one local move; a plain box with too few keypoints falls back to gradient
+    correlation after the shelf-wide warp."""
     if not al.ok:
         return {"outcome": CANNOT, "why": al.why, "items": [{"id": it.get("id"), "outcome": CANNOT} for it in old_items]}
     H = np.array(al.H)
-    warped = cv2.warpPerspective(old, H, (new.shape[1], new.shape[0]))
-    valid = cv2.warpPerspective(np.ones(old.shape[:2], np.uint8), H, (new.shape[1], new.shape[0]))
-    ga, gb = _grad(warped), _grad(new)
+    nh, nw = new.shape[:2]
+    valid = cv2.warpPerspective(np.ones(old.shape[:2], np.uint8), H, (nw, nh))
+    ga = gb = None
+    tol = LOCAL_TOL * max(nw, nh)
     out = []
     for it in old_items:
-        x0, y0, x1, y1 = it["box"]
-        pts = cv2.perspectiveTransform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), H).reshape(-1, 2)
+        box = it["box"]
+        pts = _project(box, H)
         area = float(abs(cv2.contourArea(pts)))
-        seen = np.zeros(new.shape[:2], np.uint8)
+        seen = np.zeros((nh, nw), np.uint8)
         cv2.fillConvexPoly(seen, pts.astype(np.int32), 1)
         coverage = float((seen & valid).sum()) / area if area > 0 else 0.0  # of the WHOLE projected box
-        bx0, by0 = np.floor(pts.min(0)).astype(int)
-        bx1, by1 = np.ceil(pts.max(0)).astype(int)
-        bx0, by0 = max(bx0, 0), max(by0, 0)
-        bx1, by1 = min(bx1, new.shape[1]), min(by1, new.shape[0])
-        if coverage < MIN_COVERAGE or bx1 - bx0 < 8 or by1 - by0 < 8:
+        b = _clip(pts, nw, nh)
+        if coverage < MIN_COVERAGE or b[2] - b[0] < 8 or b[3] - b[1] < 8:
             out.append({"id": it.get("id"), "outcome": CANNOT, "box_now": None, "why": "partly_out_of_view",
                         "coverage": round(coverage, 3)})
             continue
-        z = _zncc(ga[by0:by1, bx0:bx1], gb[by0:by1, bx0:bx1])
-        verdict = SAME if z >= SAME_ZNCC else CHANGED if z <= CHANGED_ZNCC else CANNOT
-        out.append({"id": it.get("id"), "outcome": verdict, "zncc": round(z, 3), "box_now": [int(bx0), int(by0), int(bx1), int(by1)]})
+        n_kp = int(_inside(al.pts_old, box).sum()) if al.pts_old is not None else 0
+        if n_kp < MIN_KP:
+            if ga is None:
+                ga, gb = _grad(cv2.warpPerspective(old, H, (nw, nh))), _grad(new)
+            z = _zncc(ga[b[1]:b[3], b[0]:b[2]], gb[b[1]:b[3], b[0]:b[2]])
+            verdict = SAME if z >= SAME_ZNCC else CHANGED if z <= CHANGED_ZNCC else CANNOT
+            out.append({"id": it.get("id"), "outcome": verdict, "by": "gradient", "zncc": round(z, 3), "box_now": b})
+            continue
+        sel = _inside(al.m_old, box)
+        local, M = 0, None
+        if sel.sum() >= 3:
+            M, inl = cv2.estimateAffinePartial2D(al.m_old[sel], al.m_new[sel], method=cv2.RANSAC,
+                                                 ransacReprojThreshold=tol)
+            local = int(inl.sum()) if M is not None else 0
+        rec = {"id": it.get("id"), "by": "matches", "keypoints": n_kp, "agreeing": local}
+        if local < MIN_LOCAL or local < SUPPORT * n_kp:
+            out.append({**rec, "outcome": CHANGED, "box_now": b})
+            continue
+        x0, y0, x1, y1 = box
+        moved = cv2.transform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), M).reshape(-1, 2)
+        size = max(x1 - x0, y1 - y0) * float(np.sqrt(abs(np.linalg.det(M[:, :2]))))
+        off = float(np.linalg.norm(moved.mean(0) - pts.mean(0)))
+        if off > MOVED_BY * size:
+            out.append({**rec, "outcome": MOVED, "box_now": _clip(moved, nw, nh), "box_expected": b})
+        else:
+            out.append({**rec, "outcome": SAME, "box_now": b})
     kinds = {o["outcome"] for o in out}
-    overall = CHANGED if CHANGED in kinds else (CANNOT if CANNOT in kinds or not out else OLD_ITEMS_SAME)
+    overall = (CHANGED if kinds & {CHANGED, MOVED} else
+               (CANNOT if CANNOT in kinds or not out else OLD_ITEMS_SAME))
     return {"outcome": overall, "alignment": al.to_dict(), "items": out}
 
 
-def new_regions(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignment) -> list[list[int]]:
-    """Boxes (new-photo px) where something may have been added: grid cells whose gradients disagree with the
-    aligned old photo, inside the part both photos show, outside where the old items now stand. Touching cells
-    join; a region needs MIN_NEW_CELLS. No alignment, no regions (the caller already says cannot compare)."""
-    if not al.ok:
+def new_regions(old: np.ndarray, old_items: list[dict], new: np.ndarray, al: Alignment,
+                found: list[dict] | None = None) -> list[list[int]]:
+    """Boxes (new-photo px) where something may have been added: grid cells full of new-photo keypoints that
+    matched nothing in the old photo, inside the part both photos show, outside the boxes of old items (found
+    there, or already asked about as a possible change; `found`: compare()'s items). Touching cells join.
+    No alignment, no regions."""
+    if not al.ok or al.pts_new is None:
         return []
-    s = min(1.0, LONG / max(new.shape[:2]))
-    S = np.diag([s, s, 1.0])
-    H = S @ np.array(al.H)  # old full px -> new reduced px
-    nw, nh = round(new.shape[1] * s), round(new.shape[0] * s)
-    small = cv2.resize(new, (nw, nh), interpolation=cv2.INTER_AREA)
-    warped = cv2.warpPerspective(old, H, (nw, nh), flags=cv2.INTER_AREA)
+    nh, nw = new.shape[:2]
+    H = np.array(al.H)
     valid = cv2.warpPerspective(np.ones(old.shape[:2], np.uint8), H, (nw, nh))
     taken = np.zeros((nh, nw), np.uint8)
-    for it in old_items:
-        x0, y0, x1, y1 = it["box"]
-        pts = cv2.perspectiveTransform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), H)
-        cv2.fillConvexPoly(taken, pts.reshape(-1, 2).astype(np.int32), 1)
-    ga, gb = _grad(warped), _grad(small)
-    floor = 0.25 * float(np.median(gb[valid > 0])) if valid.any() else 0.0
-    rows, cols = nh // CELL, nw // CELL
-    flag = np.zeros((rows, cols), np.uint8)
-    for r in range(rows):
-        for c in range(cols):
-            sl = np.s_[r * CELL:(r + 1) * CELL, c * CELL:(c + 1) * CELL]
-            if valid[sl].mean() < 0.95 or taken[sl].mean() > 0.5:
-                continue
-            a, b = ga[sl], gb[sl]
-            if max(a.mean(), b.mean()) < floor:
-                continue  # flat in both: nothing to compare
-            flag[r, c] = _zncc(a, b) <= CHANGED_ZNCC
+    for o in found if found is not None else compare(old, old_items, new, al)["items"]:
+        if o["outcome"] in (SAME, MOVED, CHANGED) and o.get("box_now"):  # found, or already a question
+            x0, y0, x1, y1 = o["box_now"]
+            taken[y0:y1, x0:x1] = 1
+    matched = {(round(float(x), 1), round(float(y), 1)) for x, y in al.m_new}
+    is_m = np.array([(round(float(x), 1), round(float(y), 1)) in matched for x, y in al.pts_new], bool)
+    cell = max(nw, nh) / GRID
+    rows, cols = int(np.ceil(nh / cell)), int(np.ceil(nw / cell))
+    um, mm = np.zeros((rows, cols)), np.zeros((rows, cols))
+    for (x, y), m in zip(al.pts_new, is_m):
+        xi, yi = int(np.clip(x, 0, nw - 1)), int(np.clip(y, 0, nh - 1))
+        if not valid[yi, xi] or taken[yi, xi]:
+            continue
+        (mm if m else um)[int(y // cell), int(x // cell)] += 1
+    flag = ((um >= NEW_UNMATCHED) & (um >= NEW_RATIO * mm)).astype(np.uint8)
     n, _, stats, _ = cv2.connectedComponentsWithStats(flag, connectivity=8)
     out = []
     for i in range(1, n):
         x, y, w, h, area = stats[i]
-        if area >= MIN_NEW_CELLS:
-            out.append([int(x * CELL / s), int(y * CELL / s), int((x + w) * CELL / s), int((y + h) * CELL / s)])
+        if area < MIN_NEW_CELLS:
+            continue
+        box = [int(x * cell), int(y * cell), int(min((x + w) * cell, nw)), int(min((y + h) * cell, nh))]
+        if not _seen_before(old, new, H, box):
+            out.append(box)
     return out
+
+
+def _seen_before(old, new, H, box) -> bool:
+    """Was this part of the new photo already in the old one, a little shifted? Things at another depth than the
+    shelf-wide fit (a ceiling, a shelf edge, glare) move by parallax and lose their matches, but they are still
+    there. Template search on gradients around where the region maps back into the old photo."""
+    s = min(1.0, LONG / max(new.shape[:2]))
+    x0, y0, x1, y1 = box
+    back = cv2.perspectiveTransform(np.float32([[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]]), np.linalg.inv(H))
+    bx0, by0 = back.reshape(-1, 2).min(0)
+    bx1, by1 = back.reshape(-1, 2).max(0)
+    pad = SEARCH * max(old.shape[:2])
+    h, w = old.shape[:2]
+    sx0, sy0 = int(max(bx0 - pad, 0)), int(max(by0 - pad, 0))
+    sx1, sy1 = int(min(bx1 + pad, w)), int(min(by1 + pad, h))
+    tmpl = _grad(cv2.resize(new[y0:y1, x0:x1], None, fx=s, fy=s, interpolation=cv2.INTER_AREA))
+    area = _grad(cv2.resize(old[sy0:sy1, sx0:sx1], None, fx=s, fy=s, interpolation=cv2.INTER_AREA))
+    if area.shape[0] < tmpl.shape[0] or area.shape[1] < tmpl.shape[1]:
+        return False
+    return float(cv2.matchTemplate(area, tmpl, cv2.TM_CCOEFF_NORMED).max()) >= SEEN_BEFORE

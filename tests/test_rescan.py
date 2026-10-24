@@ -1,7 +1,7 @@
 import cv2
 
 from tests.synth import shelf
-from tests.test_change import ITEMS, reshoot
+from tests.test_change import ITEMS, add_object, reshoot
 from verifier import rescan
 from verifier.scan import Proposal
 
@@ -32,7 +32,7 @@ def test_nothing_changed_files_without_a_model_call():
 def test_something_new_is_read_from_its_crop_only_and_mapped_back():
     old = shelf(seed=3)
     new, _ = reshoot(old)
-    cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+    add_object(new, 1150, 140, 1400, 260)
     f = Fake()
     r = rescan.run(_jpeg(old), ITEMS, _jpeg(new), f)
     assert len(f.calls) == 1 and r["action"] == "ask" and "new:1" in r["why"], r
@@ -80,8 +80,8 @@ def test_unreadable_old_photo_means_full_read():
 def test_regions_beyond_the_cap_are_not_read_but_reported():
     old = shelf(seed=3)
     new, _ = reshoot(old)
-    for x in (100, 500, 900, 1300):
-        cv2.rectangle(new, (x, 1000), (x + 180, 1120), (20, 200, 240), -1)
+    for i, x in enumerate((100, 500, 900, 1300)):
+        add_object(new, x, 980, x + 200, 1130, seed=40 + i)
     f = Fake()
     r = rescan.run(_jpeg(old), [], _jpeg(new), f, max_reads=2)
     assert len(f.calls) == 2 and len(r["new"]) >= 3 and any(n["items"] is None for n in r["new"]), r
@@ -90,7 +90,7 @@ def test_regions_beyond_the_cap_are_not_read_but_reported():
 def test_a_refused_model_call_leaves_regions_unread_and_still_asks():
     old = shelf(seed=3)
     new, _ = reshoot(old)
-    cv2.rectangle(new, (1150, 140), (1400, 260), (20, 200, 240), -1)
+    add_object(new, 1150, 140, 1400, 260)
 
     class Refusing:
         def propose(self, jpeg):
