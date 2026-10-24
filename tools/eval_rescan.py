@@ -58,7 +58,8 @@ def score(p: dict, r: dict, regions: list, al) -> dict:
         # an added (or moved-to) place is found when a new region, a changed spot or a moved item's box covers it
         "added_found": sum(any(overlaps(a, g) for g in regions + asked) for a in added),
         "added": len(added),
-        "false_new": sum(not any(overlaps(g, a) for a in added) for g in regions),
+        # "also_new": something really new in view that the owner's note did not list; not required, not false
+        "false_new": sum(not any(overlaps(g, a) for a in added + p.get("also_new", [])) for g in regions),
         "rereads_saved": sum(v == change.SAME for v in by.values()),
         "items": len(by),
     }
