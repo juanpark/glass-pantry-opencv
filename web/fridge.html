@@ -717,6 +717,7 @@ function fillNote(text, kind = ""){ const n = $("#fillNote"); n.hidden = !text; 
 $("#fillPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
   const ctx = fill, my = ctx.op = ops.start("fill");  // a newer photo makes the older reply stale
+  endBand(null); $("#fillStage").hidden = true;  // the older band step ends now, even if this photo then fails to load
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null;  // the fridge, holder and layout this photo is for
   fillNote(""); $("#fillList").hidden = true; $("#rescanBox").hidden = true;
   try{
@@ -914,6 +915,7 @@ $("#rescanPick").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f || !fill) return;
   if(!$("#consent").checked){ fillNote(CONSENT, "bad"); return; }
   const ctx = fill, my = ctx.op = ops.start("fill");  // a newer pick, a close or another holder makes this one stale
+  endBand(null); $("#fillStage").hidden = true;
   const rec = rescanRec(ctx.level), items = T.rescanItems(twin, rec);
   if(!items.length) return;
   ctx.ticket = T.ticket(twin, ctx.level); ctx.res = null; ctx.rescan = null;
