@@ -84,6 +84,7 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
     <h2>Before you start</h2>
     <p>Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Your photos are not kept on the server. Your fridge, and the last photo of each shelf, are kept in this browser on this device until you forget them, so you can come back and photograph a shelf again. Anyone using this browser can see them. Leave people, documents and anything personal out of the frame.</p>
     <p class="row"><button id="forget" type="button" class="small">Forget my fridge and photos on this device</button></p>
+    <p id="keepNote" class="note bad" hidden></p>
     <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send photos.</span></label>
     <p class="muted"><a href="shelf">Or check a single shelf photo</a></p>
   </section>
@@ -272,6 +273,10 @@ async function init(){
   }else if(m === "none"){
     $("#modelNote").hidden = false; $("#modelNote").className = "note";
     $("#modelNote").textContent = "This browser keeps your fridge in this tab only; closing it forgets it.";
+    $("#forget").textContent = "Forget my fridge in this tab";
+    let earlier = false; try{ earlier = [T.KEY, T.RESCAN_KEY].some(k => window.localStorage.getItem(k) !== null); }catch{}
+    if(earlier){ $("#keepNote").hidden = false; $("#keepNote").textContent = "A fridge saved earlier on this device is still kept "
+      + "and is not shown or deleted here; to delete it, clear this site's data in your browser settings."; }
   }
   mode = m;  // store() now knows where the fridge lives; canWrite() stays false until `ready`
   twin = load();
@@ -293,7 +298,7 @@ async function init(){
   });
   $("#forget").onclick = () => {  // two taps, no browser dialog
     const b = $("#forget");
-    if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap again to forget everything here"; return; }
+    if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = mode === "none" ? "Tap again to forget this tab's fridge" : "Tap again to forget everything on this device"; return; }
     if(!canWrite() && b.dataset.failed !== "1"){  // a read-only or still-loading tab must not delete what the writer tab may save
       $("#saveState").textContent = "Forget from the tab where your fridge is open, or close the others and reload."; return;
     }

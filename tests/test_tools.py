@@ -260,3 +260,10 @@ def test_only_the_writer_tab_saves_and_forget_stops_saving_first():
     fg = _body(p, '$("#forget").onclick = () => {', "\n  };")
     assert fg.index("broken = true") < fg.index("T.forget(")
     assert "location.reload()" in fg and "if(!r.ok)" in fg
+
+
+def test_tab_only_mode_says_its_forget_is_this_tab_and_warns_about_earlier_device_data():
+    """Codex v6 keep R3: without Web Locks, Forget covers this tab only and must not claim the device."""
+    p = _page()
+    init = _body(p, "async function init(){", "\n}")
+    assert '"Forget my fridge in this tab"' in init and "saved earlier on this device" in init
