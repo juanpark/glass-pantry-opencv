@@ -14,6 +14,8 @@ This entry reuses a few of its parts and builds the engine new.
 | Straightening (`verifier/opening.py`) | New for this entry |
 | What changed? experiment (`verifier/change.py`, `verifier/rescan.py`) | New for this entry; ALIKED and LightGlue weights are third-party (report §4) |
 | Evaluation tools (annotation page, diagnostic) | New for this entry |
+| Item models for the 3D view (`web/items/*.glb`, `items.json`) | Exported from the app (commit 6913119) by `tools/export_items.py`: 52 models the app's own Blender script generates from colour blocks (no brands, logos or bought assets), with the app's match words and sizes |
+| three.js 0.160.0 (3D drawing, OrbitControls, GLTFLoader) | Third-party, MIT licence, loaded from the jsDelivr CDN at a pinned version |
 
 The app itself is not part of this repository. Its source stays private; the video shows it separately and says
 which parts it does and does not contain.

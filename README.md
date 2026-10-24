@@ -1,5 +1,7 @@
 # Glass Pantry (OpenCV AI Competition 2026)
 
+**Live:** https://4bqaeiqta4gtyej43dpooy7cuq0gybcv.lambda-url.us-east-1.on.aws/ (front page), `fridge` (the full flow), `shelf` (one recorded shelf check), `health`.
+
 A fridge you can open on your phone, kept true by photos. A web prototype of the Glass Pantry workflow: find your
 fridge from its model sticker, trace each compartment over a photo, then photograph each shelf. A vision-language
 model (Claude) lists what it sees. OpenCV 5 gates the photo, checks the model's shelf lines against real edges,
@@ -69,4 +71,4 @@ logs that hold codes and counts only.
 | `web/index.html` | the single-shelf check (`/shelf`): upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |
 
-Docs: [architecture](docs/architecture/), [report (draft)](docs/report.md), [where the code came from](docs/provenance.md).
+Docs: [architecture](docs/architecture/), [technical report](docs/report.md), [where the code came from](docs/provenance.md).

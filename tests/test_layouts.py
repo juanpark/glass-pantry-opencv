@@ -71,4 +71,4 @@ def test_the_front_page_keeps_its_caveats():
     body = h.handler({"rawPath": "/", "requestContext": {"http": {"method": "GET"}}})["body"]
     assert "only what moved" not in body and "spots that changed are read" not in body
     assert "that setup was not part of the test" in body and "one recorded pair (a spot check)" in body
-    assert "false alarms of the kind we measured" in body  # the looping pair says which flags were real
+    assert "those 2, and 4 false alarms" in body  # the looping pair says which flags were real, above the picture

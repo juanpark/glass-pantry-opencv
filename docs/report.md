@@ -1,4 +1,4 @@
-# Glass Pantry: technical report (DRAFT, 2026-10-24)
+# Glass Pantry: technical report (2026-10-25)
 
 > Development observations and held-out results are kept apart below. The held-out zoom results were measured with
 > count re-reads on; the current label-only configuration has not been evaluated on a fresh held-out set. Numbers
@@ -136,6 +136,56 @@ A recorded run (the page's sample, `web/samples/sample.json`) shows the loop cha
 passed (Laplacian variance 468), Claude listed 28 items, OpenCV selected 4 close-ups, one label re-read disagreed
 with the first reading (`label_conflict:i11`), so the recommendation became **ask**, not file.
 
+## 3a. Agent workflow: where OpenCV's output changes the next step
+
+The model only proposes. Each OpenCV measurement below decides what happens next: whether a model is called at all,
+which crops it sees, and what the person is asked. A completed scan or rescan returns its trace (each step, its time
+and its reasons) to the page, and reasons only accumulate; nothing is filed or removed without the person.
+
+| OpenCV measurement | What it changes next | Where it is recorded |
+|---|---|---|
+| Photo gate (blur, shake, dark, glare) | a failed photo gets *retake* and **no model call** (both routes) | trace step `gate` |
+| Shelf check (Canny + HoughLinesP row profile per proposed line) | a line without edge support makes the result *ask* ("is this shelf line real?") | trace step `planes` |
+| Close-up picker (box size, patch sharpness, budget 4) | **which crops are sent** for a re-read; too-blurry ones stay unresolved | trace step `zoom` |
+| What changed? (ALIKED + LightGlue alignment, each thing's own matches, new-point cells) | **no model call** on the first pass; which things are asked about; which spots (at most 6) *may* be read, only if the person asks | trace steps `align`, `compare`, `new_regions`; §6: 56 of 71 things were marked no visible change and not re-read (SIFT 27) |
+
+![Agent loop for one shelf photo (POST /scan)](architecture/agent_loop.png)
+
+![Agent loop for a second photo of the same shelf (POST /rescan, experimental)](architecture/agent_loop_rescan.png)
+
+**Recorded trace 1: one shelf photo** (the `/shelf` page's recorded example; times are cumulative):
+
+| Step | ms | What happened |
+|---|---|---|
+| frames | 228 | one 1176 × 1568 frame for every check (original 4284 × 5712 kept for close-ups) |
+| gate | 237 | passed (Laplacian variance 468) |
+| propose | 37 070 | Claude Opus 5.5: 28 things, no shelf lines proposed (one call, model-price estimate $0.12) |
+| planes | 37 361 | nothing to check: the model proposed no shelf lines on this photo |
+| zoom | 51 550 | 4 close-ups chosen, 4 calls: i11 label **conflict**; i14 and i16 labels the same; i15 count the same |
+| decide | 51 550 | *ask* (`label_conflict:i11`): both readings of i11 are shown to the person |
+
+**Recorded trace 2: the same shelf photographed again** (the front page's example, whole photos, run on our
+development Mac; between the photos one pack was taken out and one tub moved):
+
+| Step | ms | What happened |
+|---|---|---|
+| gate | 45 | passed |
+| align | 3 472 | 157 matched points kept by the homography (inlier ratio 0.35, overlap 1.0) |
+| compare | 3 496 | 14 things: 7 no visible change (keep their reading, not read again), 6 possible change, 1 cannot compare |
+| new_regions | 3 523 | 2 spots that look new |
+| decide | 3 524 | *ask*, with **0 model calls**: 7 questions, plus 8 candidate spots for optional reading (2 new, 6 changed); at most 6 crops can be read on a requested pass |
+
+Of the 6 possible changes, 2 are real (the pack that left; the tub that moved, which was flagged rather than
+recognised as moved, with its new place among the new spots) and 4 are false alarms of the kind measured in §6.
+
+**Human control and observability.** People confirm every list. On a rescan they review the flags (each starts at
+"Still here"), mark what is gone, choose whether the marked spots are read, and confirm with Apply; only what they
+mark gone moves to Unplaced, never deleted. Forget removes this page's fridge and kept photos from the active store,
+with the device or tab scope described in §3. The operator has an on/off switch (Parameter Store) and a shared daily
+cap that fails closed (DynamoDB). Completed analyses and selected refusals and errors write one JSON line to CloudWatch
+with the engine version, route, result code and counts or timings, never photos, labels or model text; not every
+input-validation refusal is logged, so the logs are a summary, not a complete audit trail.
+
 ## 4. OpenCV 5 in the loop
 Pinned: `opencv-contrib-python-headless==5.0.0.93` (uv.lock).
 
@@ -163,7 +213,7 @@ file's SHA-1 and deletes a mismatch. They run on CPU; ALIKED's input is fixed at
   Function URL in us-east-1, deployed with SAM by GitHub Actions on qualifying pushes to `main` (documentation-only
   pushes do not deploy) or manual dispatch. CI signs in with GitHub OIDC; no long-lived AWS deployment keys. Each
   deploy runs the tests first, smoke-tests the endpoint, and runs four negative-permission probes on the deploy role.
-- **Endpoint:** `/` (front page: the idea, the steps, the measured results), `/fridge` (this page), `/shelf`
+- **Endpoint:** https://4bqaeiqta4gtyej43dpooy7cuq0gybcv.lambda-url.us-east-1.on.aws/ — `/` (front page: the idea, the steps, the measured results), `/fridge` (this page), `/shelf`
   (single-shelf check with the recorded example), `/health` (live/paused, engine version).
 - **Guards:**
   - the owner's on/off switch and the Anthropic API key in SSM Parameter Store;

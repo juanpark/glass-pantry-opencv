@@ -1,0 +1,36 @@
+// Agent loop for a second photo of a filed shelf (POST /rescan, What changed?, experimental). Render:
+//   dot -Tpng -Gdpi=200 docs/architecture/agent_loop_rescan.dot -o docs/architecture/agent_loop_rescan.png
+digraph rescan {
+  rankdir=TB; nodesep=0.5; ranksep=0.45; bgcolor="white";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=12, fillcolor="#e3f0eb", color="#1f6f5c", margin="0.18,0.08"];
+  edge [fontname="Helvetica", fontsize=10, color="#7a8580"];
+
+  last    [label="Last confirmed photo + item boxes\n(kept in the browser, on this device)", fillcolor="#f6f3fb", color="#6b5a8a"];
+  photo   [label="New photo of the same shelf\n(the person's strip)", fillcolor="#f6f3fb", color="#6b5a8a"];
+  gate    [label="PERCEIVE · OpenCV gate\nblur · shake · dark · glare"];
+  align   [label="ALIGN · OpenCV 5: ALIKED keypoints + LightGlue\nMAGSAC homography; a quarter turn is retried"];
+  judge   [label="CHECK EACH THING · its own matched points\n(local RANSAC fit) or gradient correlation\n+ cells of new unmatched points = spots that look new"];
+  decide  [label="DECIDE (no model call yet)\nreasons accumulate", shape=diamond, style="filled", fillcolor="#ffffff", fontsize=11];
+  retake  [label="RECOMMEND: retake\n(no model call)", fillcolor="#fde8e4", color="#b0413e"];
+  full    [label="cannot compare\n→ photograph it in full instead\n(no model call)", fillcolor="#eeeeee", color="#888888"];
+  keep    [label="no visible change\n→ keeps its reading, not read again", fillcolor="#e3f0eb"];
+  moved   [label="moved on this shelf\n→ told; keeps its reading,\nnew place set on Apply", fillcolor="#e3f0eb"];
+  ask     [label="possible change / can't compare\n→ a question: still here?", fillcolor="#fff4d6", color="#8a5a00"];
+  offer   [label="spots that look new or changed\n→ offered for reading", fillcolor="#fff4d6", color="#8a5a00"];
+  person  [label="Person reviews the flags (each starts at \"Still here\"),\nmarks what is gone; may ask for the marked spots to be read", fillcolor="#f6f3fb", color="#6b5a8a"];
+  read    [label="READ · Claude on the marked spots only\n(≤ 6 crops, 1 admission, only if asked)", fillcolor="#fbf1dc", color="#8a5a00"];
+  apply   [label="Apply: what the person marked gone → Unplaced (never deleted),\nticked new things added, moved things re-placed;\nthe new photo becomes the last photo", fillcolor="#f6f3fb", color="#6b5a8a"];
+
+  last -> align; photo -> gate;
+  gate -> retake [label=" fails", color="#b0413e", fontcolor="#b0413e"];
+  gate -> align [label=" passes"];
+  align -> full [label=" no trustworthy\n alignment", style=dashed];
+  align -> judge -> decide;
+  decide -> keep; decide -> moved; decide -> ask; decide -> offer;
+  keep -> apply; moved -> apply; ask -> person; offer -> person;
+  person -> read [label=" asks", style=dashed];
+  read -> person [label=" readings to tick", style=dashed];
+  person -> apply [color="#1f6f5c"];
+  { rank=same; last; photo; }
+  { rank=same; keep; moved; ask; offer; }
+}
