@@ -12,7 +12,7 @@ This entry reuses a few of its parts and builds the engine new.
 | Canonical frames, Claude adapter, zoom pass, label judge, decisions | New for this entry |
 | Lambda service, web page, deploy workflow, call cap, time budgets | New for this entry |
 | Straightening (`verifier/opening.py`) | New for this entry |
-| Change detection experiment | New for this entry |
+| What changed? experiment (`verifier/change.py`, `verifier/rescan.py`) | New for this entry; ALIKED and LightGlue weights are third-party (report §4) |
 | Evaluation tools (annotation page, diagnostic) | New for this entry |
 
 The app itself is not part of this repository. Its source stays private; the video shows it separately and says

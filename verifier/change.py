@@ -1,17 +1,20 @@
-"""Experiment (not in the live service): did anything change on this shelf since the last confirmed photo?
+"""What changed? (experimental, on the page via POST /rescan): did anything change on this shelf since the last
+confirmed photo?
 
 Two handheld photos of one shelf never line up pixel for pixel, so a pixel difference would flag everything.
 Instead: align the new photo onto the old one and fit a robust homography (USAC_MAGSAC), check the alignment is
-trustworthy, then compare each previously confirmed item's box by gradient correlation (ZNCC of Sobel magnitude),
-which tolerates the lighting changing between shots.
+trustworthy, then judge each previously confirmed item from its own matched points (a local RANSAC fit inside its
+box; gradient correlation, ZNCC of Sobel magnitude, when it has too few points), which tolerates the lighting
+changing between shots.
 
 Two ways to match points, compared on the same pairs: "learned" = OpenCV 5's ALIKED keypoints + LightGlueMatcher,
 both ONNX models run in the new DNN engine (fetched by tools/fetch_models.py); "sift" = SIFT + Lowe's ratio test.
 Everything after the matching is the same for both.
 
-Three outcomes per item: cannot compare / possible change / no visible change. For the photo the best it can say is
-"compared items unchanged": only the old items' boxes are checked. `new_regions` looks at the rest of the photo
-for something new: cells whose gradients disagree after alignment, outside where the old items now stand.
+Four outcomes per item: cannot compare / possible change / moved / no visible change. For the photo the best it can
+say is "compared items unchanged": only the old items' boxes are checked. `new_regions` looks at the rest of the
+photo for something new: cells of new keypoints that matched nothing, outside where the old items now stand, dropped
+when a gradient template search finds the same patch nearby in the old photo.
 A failed or doubtful alignment, or an item partly out of view, is "cannot compare", never "no visible change". A homography models a plane; items stand at
 different depths, so parallax is expected and the thresholds are deliberately loose.
 """

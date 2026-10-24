@@ -12,7 +12,8 @@ markers: **built** (code and tests on this branch), **planned** (decided, not ye
 | 1. Identify the fridge | photographs the model sticker or the fridge, or picks from the list; chooses among the suggestions | reads the model number and the fridge's kind (never picks a row) | photo gate first: photos below the configured blur/shake thresholds are refused before admission or a model call | **built** (`verifier/identify.py`, `POST /identify`) |
 | 2. Load its layout | sees a flat front view: compartments, shelves, drawers, door bins | none | none (the app's catalogue as data, `web/layouts/layouts.json`) | **built** |
 | 3. Confirm the layout over a photo | one photo per compartment; step 1 drags a see-through outline (named corners and edges) onto the opening; step 2 drags the catalogue's shelves and drawers, drawn in perspective, onto the real ones; confirms | none | validates the quad; `warpPerspective` to a front view of the opening plane. Corner suggestions and edge snap targets are built but **off**: they failed their pre-set bar on the test photos (below) | **built** (`verifier/opening.py`, `POST /straighten`) |
-| 4. Fill a shelf, drawer or door bin | photographs it; edits and confirms the list | reads the items | photo gate; shelf check; zoom pass (small labels re-read from the full photo; count re-reads built but off after their test) | **built** (`POST /scan`) |
+| 4. Fill a shelf, drawer or door bin | photographs it; drags two lines to this shelf's top and bottom (only that strip is sent); edits and confirms the list | reads the items | photo gate; shelf check; zoom pass (small labels re-read from the received strip; count re-reads built but off after their test) | **built** (`POST /scan`) |
+| 5. Photograph it again: what changed? | photographs the same shelf later; checks the lines; answers the questions; may ask for the marked spots to be read; applies | reads only the marked spots, if asked | OpenCV 5 ALIKED + LightGlue align the new strip to the last one; per item no visible change / possible change / moved / cannot compare; new regions. Gone things go to Unplaced, never deleted | **experimental** (`verifier/rescan.py`, `POST /rescan`); failed its pre-set bar on false flags (report §6) |
 
 Rules the page keeps (`web/fridge.html`):
 - **Suggestions are judged before they ship.** On the held-out test photos (hand truth, `tools/eval_trace.py`) the corner
@@ -22,8 +23,8 @@ Rules the page keeps (`web/fridge.html`):
 - **Nothing is filed without a person.** A suggestion (when enabled) is drawn dashed and labelled; an opening is accepted only after
   the person confirms the corners. A photo where the opening cannot be framed is traced unstraightened, labelled
   unverified.
-- **OpenCV never invents.** It never adds a shelf, an item or a model, and never moves a line by itself; a line the
-  person drops near an edge lands on it.
+- **OpenCV never invents.** It never adds a shelf, an item or a model, and never moves a line by itself; with edge snap
+  targets switched on (they are off, above), a line the person drops near an edge would land on it.
 - **A scan adds; it never deletes.** Removing a shelf moves its things to Unplaced; changing the fridge model with
   things in it asks first and moves them to Unplaced.
 - **Answers stay bound to their photo and layout.** Corners carry the photo's hash; a scan answer is refused if its

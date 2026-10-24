@@ -95,10 +95,28 @@ comparisons.
    close-up never clears an unconfirmed shelf. Scans append to the browser twin without replacing saved entries.
    **A person confirms the list before anything is kept.**
 
+**The shelf band.** A shelf photo usually shows the shelves above and below too. After picking a photo, the person
+drags two lines to this shelf's top and bottom; only that strip, plus a margin of 3% of the photo's height above and
+below, is sent, which reduces what the model sees of the neighbouring shelves; the zoom pass's close-ups are cut from
+the strip too. It does not establish where a thing physically stands: perspective, the margin or a misplaced line can
+still include a neighbour's things, and the person reviews the list as before. The lines are kept and
+offered again on the next photo of that shelf.
+
+**What changed? (experimental).** After a shelf has been filed, its photo (long edge at most 1568 px) and item boxes are kept
+in the tab beside the fridge. A later photo of the same shelf is first compared by OpenCV alone, with no model call:
+each known item is *no visible change*, *possible change*, *moved* or *cannot compare*, and regions with something
+new are marked. Only then may the person ask the model to read the marked spots (one admission, at most 6 crops).
+Apply moves things that are gone to Unplaced (never deleted), adds the ticked new rows and updates moved things'
+place in the 3D view. It failed its pre-set bar (§6) and is labelled experimental on the page.
+
 ![Architecture: browser, AWS Lambda with OpenCV 5, Anthropic API](architecture/architecture.png)
 
-The browser holds the fridge (session storage) and draws it. The Lambda container receives one photo per request,
-keeps it in memory only for that request, runs the OpenCV steps, and calls the Anthropic API. A shelf scan or a
+The browser holds the fridge (session storage) and draws it. The picture shows the scan, identify and straighten
+paths: the Lambda container receives one photo per request, keeps it in memory only for that request, runs the
+OpenCV steps, and calls the Anthropic API. *What changed?* (`POST /rescan`) is a second route not drawn there: it
+receives two photos (the last confirmed one, kept in the tab, and the new one), also only in memory. Its first pass
+is OpenCV only, with no admission and no model call; the optional reading of the marked spots takes one admission,
+and only when a spot is actually read. A shelf scan or a
 fridge identification takes one admission from the DynamoDB daily counter before any model call (identify's quality
 gate runs before its admission, the shelf scan's gate just after it); outline straightening needs no admission. The API key and the owner's on/off switch are in SSM Parameter Store.
 
@@ -120,10 +138,18 @@ Pinned: `opencv-contrib-python-headless==5.0.0.93` (uv.lock).
 | Outline check + straightening | quad validation, `getPerspectiveTransform`, `warpPerspective` | refuses an outline it cannot straighten, with the reason in words; a front view of the opening plane |
 | Opening suggestion (built, **off**) | `Canny`, `findContours`, `convexHull`, `approxPolyDP` | failed its pre-set bar (§6); people place corners by hand |
 | Snap edges (built, **off**) | `Canny`, `HoughLinesP` row profile on the straightened view | failed its pre-set bar (§6) |
-| Change detection (experiment) | `SIFT`, `BFMatcher` kNN + ratio test, `findHomography` with `USAC_MAGSAC`, `warpPerspective`, gradient ZNCC | per old item: unchanged / possible change / cannot compare |
+| What changed? (experimental) | OpenCV 5 `ALIKED` keypoints + `LightGlueMatcher` (new DNN engine, ONNX models), `findHomography` with `USAC_MAGSAC`, per-item `estimateAffinePartial2D` (RANSAC), gradient `matchTemplate`; a quarter-turned photo is retried turned | per old item: no visible change / possible change / moved / cannot compare; new regions; which spots the model may read |
+| Baseline for it | `SIFT`, `BFMatcher` kNN + ratio test, same per-item rules | compared side by side (§6), not used on the page |
+
+Models for *What changed?*: ALIKED (`aliked-n16rot-top1k-640.onnx`, upstream BSD-3-Clause,
+github.com/Shiaoming/ALIKED) and LightGlue for ALIKED (`aliked_lightglue.onnx`, upstream Apache-2.0,
+github.com/cvg/LightGlue). The ONNX exports are fetched from a third-party repository that carries no licence file
+of its own (github.com/YangGuanyuhan/lightglue_opencv_project); they are the same URLs and SHA-1 hashes OpenCV's own
+5.x test data lists (opencv_extra `testdata/dnn/download_models.py`). `tools/fetch_models.py` fetches them, checks each
+file's SHA-1 and deletes a mismatch. They run on CPU; ALIKED's input is fixed at 640×640.
 
 ## 5. AWS deployment
-- **Compute:** the repository configures an x86_64 Lambda container image (2048 MB, 150 s timeout) behind a
+- **Compute:** the repository configures an x86_64 Lambda container image (4096 MB, 150 s timeout) behind a
   Function URL in us-east-1, deployed with SAM by GitHub Actions on qualifying pushes to `main` (documentation-only
   pushes do not deploy) or manual dispatch. CI signs in with GitHub OIDC; no long-lived AWS deployment keys. Each
   deploy runs the tests first, smoke-tests the endpoint, and runs four negative-permission probes on the deploy role.
@@ -184,6 +210,27 @@ the zoom pass only added questions. One kitchen, 12 scans: no recall or end-to-e
 In the count-enabled configuration it cost +$0.015 (model price) and +4 s per scan with 2 of 28 false label
 questions.
 
+**What changed? (rescan experiment).** The plan and pass bar were frozen before any real pair was opened: on new
+pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 false item flag per pair; ≤ 2 false
+"something new" regions per pair; under 10 s per pair on Lambda; SIFT reported beside it.
+- **Round 1** (5 pairs): **failed**. Both drawer pairs were shot with the phone turned 90° between photos and did not
+  align (7 inliers and 39 candidate matches, respectively); one of two additions was found. Those pairs were then used for development (the
+  quarter-turn retry and three per-item rules), so they are no longer evidence.
+- **Round 2** (6 new pairs, two with nothing changed, one with the phone turned; code locked first): aligned 6/6;
+  removals 3/3; the one moved item flagged and its new place found; the one addition found; nothing-changed pairs
+  0 false item flags. **Failed** on false flags: 8 in total (4 on one shelf: things the removed pack had covered or
+  leaned on; 3 in a drawer: soft bags that shifted) and 7 false new regions (bar ≤ 1 and ≤ 2 per pair). With the
+  same rules SIFT made 38 false item flags and 12 false new regions. Items marked no visible change, so not re-read:
+  56 of 71 (SIFT 27). Scoring was corrected once after review (a move had been counted as a removal); the numbers
+  above are the corrected ones, from the same recorded runs.
+- **Time:** this Mac 2.0–3.2 s per pair (SIFT 0.2 s). On Lambda, OpenCV-only pass on one unchanged pair (0.77 MB
+  request), end to end (engine): at 2048 MB the first call took 13.9 s (12.2 s, loading the models), then 7.3 s
+  (5.7 s), failing the 10 s bar on a first call; at 4096 MB (more CPU) 9.0 s (7.3 s), then 4.4 s (2.8 s), both
+  under it. One pair, three calls each: a spot check, not a distribution. Billed duration and cost per call were not
+  measured; from the warm engine times alone (memory × time) the two settings would cost about the same.
+- **Not measured:** both rounds compared whole photos; the page now compares the shelf band only, and that
+  configuration has not been evaluated. Per the frozen plan the feature stays experimental.
+
 **Failures we saw and what we did:**
 
 | Failure | Fix |
@@ -205,8 +252,10 @@ questions.
 - Browser uploads are reduced to 3024 px; development runs used full-resolution files.
 - The 3D view is schematic (approximate depth, no door bins) and needs WebGL and a CDN (three.js 0.160.0); if it
   cannot load, the 2D drawing stays.
-- **Change detection** is an experiment: tested on generated images, not on real handheld pairs. It says nothing
-  about things added outside the old items' boxes.
+- **What changed?** failed its pre-set bar on false flags (§6). Things leaning on or hidden behind a removed item
+  look changed and are asked about; soft packs that shift do too. It compares one plane (a homography), so strong
+  parallax between the two photos raises questions. Items the first reading never listed are not tracked. The band
+  configuration on the page has not been evaluated. The recorded first call on the timing pair took 9.0 s; how long a first call takes in general was not measured.
 - **Identifying the fridge** knows 11 models and 5 generic layouts. The "same family" rule is a prefix heuristic,
   and maker conflicts are only recognised for Samsung, LG and Winia.
 - Real-phone touch use has been tested in emulation; a test on an iPhone is pending at the time of writing.
@@ -234,4 +283,4 @@ questions.
 | Recorded example on the page | Replay of one real run, labelled RECORDED |
 | Glass Pantry app footage in the video | The existing mobile app (TestFlight). The OpenCV loop is **not** in the app; a prototype build, if shown, is labelled as such |
 | Fridge from a sticker photo, two-step outline editor, 3D view | On the web page only, not in the phone app (the app has its own 3D renderer) |
-| Change detection | Experiment, not in the service |
+| What changed? | On the page, labelled experimental; failed its pre-set bar (§6). Not in the phone app |
