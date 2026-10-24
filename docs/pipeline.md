@@ -42,8 +42,8 @@ Rules the page keeps (`web/fridge.html`):
 52 baked models, exported by `tools/export_items.py`; the app's longest-word rule; catalogue size, scaled down uniformly to
 the renderer's limits: at most 90% of the level's height, half its width, and its depth). Otherwise a box or cylinder from a
 basic family (bottle, can, jar, carton, tub, tray, pouch, bag, box) chosen by the scan's vessel word, sized by the
-shelf photo's item box, with the thing's own photo crop on its front when the last photo of its shelf is kept (else
-plain). A model that fails to load leaves its placeholder shape. The item box guides horizontal position; depth comes from where its foot stands in the photo (approximate). Door bins, retired
+shelf photo's item box, with its own photo crop on its front when a matching retained crop for that item and shelf is available and
+decodes (the shelf's latest kept photo lists it); otherwise plain. A model that fails to load leaves its placeholder shape. The item box guides horizontal position; depth comes from where its foot stands in the photo (approximate). Door bins, retired
 levels and Unplaced are not drawn in 3D (`web/scene.js`).
 
 **Planned:** the label flattened from the photo with a homography onto a flat face; per-product models are upgrades

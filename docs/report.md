@@ -55,7 +55,8 @@ drawn through (crossed corners, a corner on the diagonal, under 5% of the photo)
 their things. A thing whose reading names a row of the phone app's item library (52 baked models, matched by the app's
 own rule: the longest match word wins) is drawn with that model, starting from its catalogue dimensions and scaled down uniformly to the renderer's limits
 (90% of the level's height, half its width, its depth); any other thing is a basic box or cylinder sized by its box in the
-shelf photo, wearing its own crop from that photo on the front when the shelf's last photo is kept (otherwise plain).
+shelf photo, wearing its own photo crop on the front when a matching retained crop for that item and shelf is available and
+decodes (the shelf's latest kept photo lists it); otherwise plain.
 A model that fails to load leaves its placeholder. The item boxes guide horizontal position; depth comes from where the thing's foot stands in the photo,
 and is approximate, not reconstructed or measured. Older rows without placement are spread evenly. After a confirmed
 *What changed?*, the view glides to that shelf and plays the change: gone things fade out, moved things slide, new
