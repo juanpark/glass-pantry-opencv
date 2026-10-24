@@ -197,7 +197,7 @@ def test_the_3d_view_is_lazy_read_only_and_served():
     import json
     from service import handler as h
     p = _page()
-    d3 = _body(p, "async function draw3d(from = null){", "\n}")
+    d3 = _body(p, "async function draw3d(change = null){", "\n}")
     assert 'import("./twin3d.js")' in d3 and "could not load" in d3
     assert "commit(" not in d3 and "T.commit(" not in d3
     assert "...placement(tr.dataset.id)" in p
@@ -214,3 +214,10 @@ def test_reframing_on_resize_also_resets_the_orbit_target():
     src = (Path(__file__).resolve().parent.parent / "web" / "twin3d.js").read_text(encoding="utf-8")
     fit = src[src.index("const fit = () =>"):src.index("const ro =")]
     assert fit.index("ctl.target.set(...frame())") < fit.index("ctl.update()")
+
+
+def test_a_comparison_still_loading_never_returns_after_apply():
+    """Codex v6 R1 #1: the image continuation and every frame check that this comparison is still the open one."""
+    p = _page()
+    show = _body(p, "function showRescan(res, url, my, read){", "\n}")
+    assert show.count("live()") >= 2 and "const live = () => fillLive(my) && fill.rescan === rs" in show

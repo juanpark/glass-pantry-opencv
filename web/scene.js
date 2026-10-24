@@ -56,6 +56,26 @@ export function cameraFor({w, h, d}, aspect, fov = 35, at = null) {
   return {fov, target, position: dir.map((v, i) => target[i] + v / n * dist)};
 }
 
+/** What changed on one shelf between two drawings: things there before and after (by pid) that moved, things that
+ * arrived, and things that left. Only that shelf, and only rows with a pid, so nothing elsewhere is shown as changed. */
+export function changeOf(beforeParts, afterParts, level) {
+  const on = ps => new Map(ps.filter(p => p.kind === "item" && p.level === level && p.pid).map(p => [p.pid, p]));
+  const a = on(beforeParts), b = on(afterParts);
+  const moved = [], added = [], gone = [];
+  for (const [pid, p] of b) {
+    const q = a.get(pid);
+    if (!q) added.push(pid);
+    else if (q.box.some((v, i) => Math.abs(v - p.box[i]) > 1)) moved.push({pid, from: q.box, to: p.box});
+  }
+  for (const [pid, q] of a) if (!b.has(pid)) gone.push(q);
+  return {moved, added, gone};
+}
+
+/** The first ray hit whose object and every parent are shown: a faded-out thing never takes a tap. */
+export function firstShown(hits) {
+  return hits.find(h => { if (!h.object.isMesh) return false; for (let o = h.object; o; o = o.parent) if (!o.visible) return false; return true; });
+}
+
 /** The box around one level: its plate or drawer and everything standing on it, up to the level above. For framing
  * the camera on the shelf that just changed. Returns {at: centre, w, h, d} or null. */
 export function levelBox(parts, level) {

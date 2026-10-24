@@ -357,7 +357,7 @@ function clip(t, n){ return t.length > n ? t.slice(0, n - 1) + "…" : t; }
 function count(id){ return (twin.items[id] || []).length; }
 
 let view3d = null, view3dGen = 0;  // the 3D view: drawn from the same twin, read-only, loaded only when asked for
-async function draw3d(from = null){  // from: the fridge before a change, so the change is shown moving
+async function draw3d(change = null){  // change: {from: the fridge before, level: the shelf that changed}, shown moving
   const my = ++view3dGen;  // only the newest request draws
   if(view3d){ view3d.dispose(); view3d = null; }
   if($("#view3d").hidden || !twin) return;
@@ -365,7 +365,7 @@ async function draw3d(from = null){  // from: the fridge before a change, so the
   try{
     const m = await import("./twin3d.js");
     if(my !== view3dGen || $("#view3d").hidden) return;
-    view3d = m.mount($("#view3d"), twin, row(twin.key), from);
+    view3d = m.mount($("#view3d"), twin, row(twin.key), change);
   }
   catch{ $("#view3d").textContent = "The 3D view could not load here; the drawing below shows the same fridge."; }
 }
@@ -969,13 +969,14 @@ function showRescan(res, url, my, read){
   // the last photo above the new one: OpenCV's matched points joined, then each thing boxed by what was found
   const rs = fill.rescan;
   $("#rescanSay").textContent = read ? "" : C.summary(res); $("#rescanSay").hidden = read;
+  const live = () => fillLive(my) && fill.rescan === rs;  // Apply or a new comparison ends this one
   Promise.all([loadImg("data:image/jpeg;base64," + rs.rec.photo), loadImg(url)]).then(([oldImg, newImg]) => {
-    if(!fillLive(my)) return;
+    if(!live()) return;
     const cv = $("#fillCv"); cv.width = 1200;
     $("#fillStage").hidden = false; $("#rescanKey").hidden = false;
     const t0 = performance.now(), dur = read ? 1 : 2200;
     (function frame(now){
-      if(!fillLive(my)) return;
+      if(!live()) return;
       const t = Math.min(1, (now - t0) / dur);
       C.draw(cv, oldImg, newImg, res, rs.items, t);
       if(t < 1) requestAnimationFrame(frame);
@@ -1053,7 +1054,7 @@ $("#rescanOk").onclick = () => {
   openFillKeep(); render();
   if(twin !== prev){  // show the change in 3D: gone things fade out, moved ones slide, new ones drop in
     $("#view3d").hidden = false; $("#view3dBtn").textContent = "Hide 3D view";
-    draw3d(prev); $("#view3d").scrollIntoView({behavior:"smooth", block:"center"});
+    draw3d({from:prev, level:fill.level}); $("#view3d").scrollIntoView({behavior:"smooth", block:"center"});
   }
 };
 
