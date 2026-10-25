@@ -1,4 +1,7 @@
-# Glass Pantry (OpenCV AI Competition 2026)
+# Glass Pantry Vision Lab (OpenCV AI Competition 2026)
+
+**Using OpenCV to upgrade our fridge app.** A lab for our phone app, Glass Pantry, not the app itself: we test vision
+here, and what passes goes into the app. Team 8yte, South Korea and Bangladesh.
 
 **Live:** https://4bqaeiqta4gtyej43dpooy7cuq0gybcv.lambda-url.us-east-1.on.aws/ (front page), `fridge` (the full flow), `shelf` (one recorded shelf check), `health`.
 

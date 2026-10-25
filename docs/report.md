@@ -1,4 +1,6 @@
-# Glass Pantry: technical report (2026-10-25)
+# Glass Pantry Vision Lab: technical report (2026-10-25)
+
+A lab for our phone app, Glass Pantry (not the app itself): OpenCV is tested here before it goes into the app.
 
 > Development observations and held-out results are kept apart below. The held-out zoom results were measured with
 > count re-reads on; the current label-only configuration has not been evaluated on a fresh held-out set. Numbers
