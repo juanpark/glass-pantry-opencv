@@ -239,3 +239,14 @@ def test_an_http_request_never_takes_the_warm_path():
     r = h.handler({"rawPath": "/health", "requestContext": {"http": {"method": "GET"}}, "source": "aws.events"},
                   warmer=lambda: pytest.fail("not a ping"))
     assert r["statusCode"] == 200
+
+
+def test_the_default_warm_up_runs_the_matcher_once_per_copy(monkeypatch):
+    # Loading alone left the first real comparison 2-3 s slower on Lambda: OpenCV's DNN engine sets up on its first run.
+    from verifier import change
+    runs = []
+    monkeypatch.setattr(change, "_match_learned", lambda a, b: runs.append(a.shape))
+    change.warm.cache_clear()
+    h._warm()
+    h._warm()
+    assert len(runs) == 1

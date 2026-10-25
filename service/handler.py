@@ -325,9 +325,9 @@ def rescan_route(event, context, is_enabled, admitter, key, rescanner) -> dict:
 
 
 def _warm():
-    """Load OpenCV 5's ALIKED + LightGlue models so the next comparison does not pay for it (keep-warm ping)."""
+    """Load OpenCV 5's ALIKED + LightGlue models and run them once, so the next comparison does not pay for it."""
     from verifier import change
-    change._learned()
+    change.warm()
 
 
 def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key,
