@@ -91,7 +91,7 @@ footer{font-size:.84rem}
         is marked experimental. 56 of 71 things were marked no visible change and not read again (SIFT: 27). The page
         compares one shelf strip; that setup was not part of the test.</li>
       <li><b>Second looks at small labels:</b> no wrong first reading to catch in 28; no accuracy gain claimed.</li>
-      <li><b>Speed on AWS</b>, OpenCV comparing one recorded pair (a spot check): 4.4 s, 9.0 s on the first call.</li>
+      <li><b>Speed on AWS</b>, OpenCV comparing one recorded pair (spot checks): one pair took 4.4 s, and 9.0 s on its first call. After we added a ping every 5 minutes to keep it warm (best effort), another pair took 5.1 s on its first call, then 4.8 s.</li>
     </ul>
     <p class="muted" style="font-size:.84rem">One kitchen and few photos: these show behaviour, not general accuracy.</p>
   </section>
