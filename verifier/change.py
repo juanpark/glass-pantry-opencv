@@ -93,6 +93,14 @@ def _learned():
     return det, cv2.LightGlueMatcher.create(str(MODELS / "aliked_lightglue.onnx"))
 
 
+@cache
+def warm():
+    """Run the matcher once on a made-up texture (keep-warm ping). OpenCV's DNN engine sets itself up on its first
+    run; without this, that cost landed on the first real comparison (Lambda: 7.7 s instead of 4.6 s, 10/25)."""
+    img = cv2.GaussianBlur((np.random.default_rng(0).random((480, 640)) * 255).astype(np.uint8), (5, 5), 0)
+    _match_learned(img, img)
+
+
 def _match_learned(a, b):
     det, lg = _learned()
     ka, da = det.detectAndCompute(a, None)
