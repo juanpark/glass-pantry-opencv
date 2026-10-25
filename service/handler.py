@@ -324,8 +324,22 @@ def rescan_route(event, context, is_enabled, admitter, key, rescanner) -> dict:
     return _resp(200, res)
 
 
+def _warm():
+    """Load OpenCV 5's ALIKED + LightGlue models so the next comparison does not pay for it (keep-warm ping)."""
+    from verifier import change
+    change._learned()
+
+
 def handler(event, context=None, *, scanner=scan_photo, admitter=admit, is_enabled=enabled, key=api_key,
-            identifier=identify_photo, rescanner=rescan_photos):
+            identifier=identify_photo, rescanner=rescan_photos, warmer=_warm):
+    if event.get("source") == "aws.events" and "requestContext" not in event:  # EventBridge keep-warm ping
+        t0, log = time.time(), {"route": "warm", "result": "ok"}
+        try:
+            warmer()
+        except Exception as e:  # a failed warm-up must not fail the schedule; the next request loads the models
+            log.update(result="error", kind=type(e).__name__)
+        _log(**log, ms=round((time.time() - t0) * 1000))
+        return _resp(200, {"warm": log["result"] == "ok"})
     http = (event.get("requestContext") or {}).get("http") or {}
     method, path = http.get("method", "GET"), event.get("rawPath", "/")
     if method == "GET" and path in ("/", "/shelf"):  # the front door; the single-shelf check

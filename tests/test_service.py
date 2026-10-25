@@ -212,3 +212,30 @@ def test_rescan_without_reading_never_counts_or_calls_the_model(monkeypatch):
     s, b = call(ev("POST", "/rescan", json.dumps(body).encode(), "application/json"),
                 admitter=lambda: pytest.fail("nothing read, nothing counted"))
     assert s == 200 and b["action"] == "ask" and b["model_calls"] == 0 and b["new"][0]["unread"] == "cap", b
+
+
+SCHEDULED = {"version": "0", "source": "aws.events", "detail-type": "Scheduled Event", "detail": {}}
+
+
+def test_the_keep_warm_ping_loads_the_matcher_and_nothing_else(capsys):
+    loaded = []
+    r = h.handler(SCHEDULED, warmer=lambda: loaded.append(1),
+                  scanner=lambda *a, **k: pytest.fail("no scan"), admitter=lambda: pytest.fail("no admission"))
+    assert loaded == [1]
+    assert r["statusCode"] == 200 and json.loads(r["body"])["warm"] is True
+    assert '"route": "warm"' in capsys.readouterr().out
+
+
+def test_a_failed_warm_up_is_logged_not_raised(capsys):
+    def boom():
+        raise RuntimeError("model file missing")
+    r = h.handler(SCHEDULED, warmer=boom)
+    assert r["statusCode"] == 200 and json.loads(r["body"])["warm"] is False
+    out = capsys.readouterr().out
+    assert "RuntimeError" in out and "model file missing" not in out
+
+
+def test_an_http_request_never_takes_the_warm_path():
+    r = h.handler({"rawPath": "/health", "requestContext": {"http": {"method": "GET"}}, "source": "aws.events"},
+                  warmer=lambda: pytest.fail("not a ping"))
+    assert r["statusCode"] == 200
