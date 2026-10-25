@@ -44,7 +44,8 @@ uv run python tools/serve_local.py --live                   # the web page on ht
 or on manual dispatch. It signs in with GitHub OIDC (no stored keys) to a
 role meant for this stack's own resources, then smoke-tests the endpoint and runs four probes that the role is
 refused elsewhere. The owner creates the execution role, the log group, the ECR repository, the upload bucket and the
-call-counter table once (`template.yaml` names them).
+call-counter table once (`template.yaml` names them), and an EventBridge rule that invokes the function every
+5 minutes as a keep-warm ping (the handler then only loads the OpenCV 5 matching models; no admission, no model call).
 
 Guards on the live endpoint (all server-side): an owner on/off switch in Parameter Store, a shared daily scan cap
 (atomic DynamoDB counter, fails closed), upload size and pixel limits, a time budget for every model call, and
