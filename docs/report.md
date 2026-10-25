@@ -1,4 +1,6 @@
-# Glass Pantry: technical report (2026-10-25)
+# Glass Pantry Vision Lab: technical report (2026-10-25)
+
+A lab for Glass Pantry, the fridge app we are building (an early build, in private testing; not the app itself): OpenCV is tested here before it goes into the app.
 
 > Development observations and held-out results are kept apart below. The held-out zoom results were measured with
 > count re-reads on; the current label-only configuration has not been evaluated on a fresh held-out set. Numbers
@@ -15,7 +17,7 @@ a person to confirm the list; the aim is fewer silent errors, not automatic fili
 
 ## 2. Users
 Households keeping track of food, Korean kitchens first (a label does not always say what is inside a reused jar).
-Glass Pantry is our mobile app for this, in TestFlight testing. **This entry is a separate web prototype** inspired by
+Glass Pantry is the mobile app we are building for this: an early build in private (TestFlight) testing, not released. **This entry is a separate web prototype** inspired by
 the app's workflow; it reuses the app's frozen scan prompt and an export of its appliance catalogue. Its OpenCV
 verification loop is **not** in the phone app, and identical results are not claimed. It is a prototype: user
 benefit and usability have not been measured.
@@ -343,6 +345,6 @@ pairs, align ≥ 5 of 7; flag every removed item; find every added item; ≤ 1 f
 |---|---|
 | Web page + engine on AWS | Deployed from `main`; the owner's switch decides whether live reading is on |
 | Recorded example on the page | Replay of one real run, labelled RECORDED |
-| Glass Pantry app footage in the video | The existing mobile app (TestFlight). The OpenCV loop is **not** in the app; a prototype build, if shown, is labelled as such |
+| Glass Pantry app footage in the video | The app we are building (an early build, run in the iOS simulator with made-up demo data). The OpenCV loop is **not** in the app |
 | Fridge from a sticker photo, two-step outline editor, 3D view | On the web page only, not in the phone app (the app has its own 3D renderer) |
 | What changed? | On the page, labelled experimental; failed its pre-set bar (§6). Not in the phone app |
