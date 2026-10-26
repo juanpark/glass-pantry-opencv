@@ -6,77 +6,152 @@
 <title>Glass Pantry Shelf Check</title>
 <style>
 /* One column: notice → photo → what the engine did → the list a person confirms. */
+/* ---- shared base: identical on home.html, index.html and fridge.html ---- */
 :root{
-  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c;
+  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c; --accent-hi:#185a4a; --on-accent:#fff;
   --ok:#2e8b57; --ask:#c77700; --bad:#c0392b; --info:#2f6fb3; --grey:#8a948e; --code:#eef1ee;
+  --ok-ink:#23704a; --ask-ink:#965900; --info-ink:#2a63a1;  /* status colours as text: 4.5:1 on the panel */
+  --fs-xs:.75rem; --fs-sm:.86rem; --r:8px; --r-sm:6px; --tap:44px;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
   --mono:ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root{
-  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8;
-  --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26; color-scheme:dark}}
+  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8; --accent-hi:#86d3ba; --on-accent:#0f1a16;
+  --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26;
+  --ok-ink:var(--ok); --ask-ink:var(--ask); --info-ink:var(--info); color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
-  padding:24px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+  padding:28px max(16px,env(safe-area-inset-right)) 72px max(16px,env(safe-area-inset-left))}
 main{max-width:980px;margin:0 auto;display:grid;gap:20px}
-h1{font-size:1.6rem;margin:0;letter-spacing:-.01em}
-h2{font-size:1.05rem;margin:0}
+h1{font-size:clamp(1.45rem,1.1rem + 1.5vw,1.75rem);line-height:1.2;margin:0;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:1.25rem;line-height:1.3;margin:0;letter-spacing:-.01em}
+.h3{font-size:.95rem}
 p{margin:0;max-width:70ch}
+a{color:var(--accent);text-underline-offset:.18em;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .muted{color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
+.fine{font-size:var(--fs-sm)}
+.top{display:grid;gap:8px}
+.top .title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.top .title h1{min-width:0}
+.top .title .chip{flex:none;margin-top:.3em}
+.top>a{justify-self:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:12px;min-width:0}
+.card p,.card ol,.card ul{max-width:none}  /* text fills its card; the 70ch measure is for the open page */
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
-.live{color:var(--ok)} .rec{color:var(--info)} .off{color:var(--grey)}
-button,.btn{font:600 .92rem var(--sans);border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
-button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
-button:focus-visible,.btn:focus-within,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input[type=file]{display:none}
-label.consent{display:flex;gap:8px;align-items:flex-start}
-.decision{border-left:6px solid var(--grey);padding:10px 14px;border-radius:6px;background:var(--code)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 var(--fs-xs)/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 9px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.chip:not(:empty)::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.live{color:var(--ok-ink)} .off{color:var(--muted)} .rec{color:var(--info-ink)} .warn{color:var(--ask-ink)}
+button,.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);
+  font:600 .94rem/1.25 var(--sans);text-align:center;text-decoration:none;border-radius:var(--r-sm);padding:10px 16px;
+  border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;transition:background-color .15s,border-color .15s}
+button:not(:disabled):hover,.btn:not([aria-disabled=true]):hover{border-color:var(--muted)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.primary:not(:disabled):hover,.btn.primary:not([aria-disabled=true]):hover{background:var(--accent-hi);border-color:var(--accent-hi)}
+button.small,.btn.small{min-height:36px;padding:6px 12px;font-size:var(--fs-sm)}
+button:disabled,.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed}
+.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+/* a file input stays focusable inside its label, so the upload buttons can be reached with the keyboard */
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+label.consent{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));
+  border-radius:var(--r-sm);background:var(--code);font-weight:600;cursor:pointer}
+.card>label.consent{margin-top:8px}  /* breathing room from the text it confirms */
+label.consent input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+@media (max-width:480px){
+  .card{padding:16px}
+  .actions>button,.actions>.btn{flex:1 1 100%}
+}
+@media (prefers-reduced-motion:reduce){button,.btn{transition:none}}
+/* page header: a big title with the status on the right, a tagline, then the quieter intro */
+.top{gap:10px;padding-bottom:8px}
+.top h1{font-size:clamp(1.9rem,1.3rem + 2.4vw,2.5rem);line-height:1.12;letter-spacing:-.025em}
+.top .title .chip{margin-top:.7em}
+.top .tagline{font-size:clamp(1.1rem,1rem + .5vw,1.28rem);font-weight:600;line-height:1.35;color:var(--fg);margin-bottom:4px}
+.top .muted,.top .pitch{font-size:1.03rem;max-width:62ch}
+@media (max-width:520px){  /* phones: the status sits on its own row above the title, still on the right, so the title keeps the width */
+  .top .title{flex-wrap:wrap-reverse;gap:8px}
+  .top .title h1{flex-basis:100%}
+  .top .title .chip{margin:0 0 0 auto}
+}
+.card h2:not(.h3){font-size:clamp(1.25rem,1.12rem + .55vw,1.45rem)}
+/* facts: one point per row, divided by hairlines, each with an icon (server, this device, the frame, the daily cap) */
+ul.facts{margin:0;padding:0;list-style:none;display:grid}
+ul.facts li{position:relative;padding:14px 0 14px 48px;border-top:1px solid var(--line)}
+ul.facts li:last-child{padding-bottom:2px}
+ul.facts li::before{content:"";position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 13%,transparent)}
+ul.facts li::after{content:"";position:absolute;left:7px;top:19px;width:18px;height:18px;background:var(--accent);
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.i-cloud{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E")}
+.i-device{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='2.5' width='10' height='19' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E")}
+.i-timer{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='14' r='7.5'/%3E%3Cpath d='M12 14l3.5-3.5M9.5 3h5'/%3E%3C/svg%3E")}
+.i-lock{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9.5' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E")}
+.i-frame{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16'/%3E%3Ccircle cx='12' cy='10.5' r='2.5'/%3E%3Cpath d='M8 17c1-1.8 2.4-2.7 4-2.7s3 .9 4 2.7'/%3E%3C/svg%3E")}
+/* key: what each colour in a drawing means; --c is the drawing's own colour. Boxes by default, .line for a stroke */
+.key{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--fg)}
+.key>li{display:inline-flex;align-items:center;gap:8px}
+.key>li::before{content:"";flex:none;width:14px;height:10px;border:2px solid var(--c);border-radius:2px}
+.key>li.dashed::before{border-style:dashed}
+.key>li.line::before{height:0;border-width:3px 0 0;border-radius:0}
+@media (prefers-reduced-motion:reduce){details summary::after{transition:none}}
+/* ---- this page ---- */
+.decision{display:grid;gap:4px;border-left:6px solid var(--grey);padding:12px 16px;border-radius:var(--r-sm);background:var(--code)}
+.decision ul{margin:4px 0 0;padding-left:1.1rem}
 .decision.file{border-color:var(--ok)} .decision.ask{border-color:var(--ask)} .decision.retake{border-color:var(--bad)}
 .decision b{font-size:1.05rem}
 .stage{position:relative;width:100%;min-width:0}
-canvas{width:100%;height:auto;border-radius:6px;display:block;background:var(--code)}
-.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--muted)}
-.sw{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
+canvas{width:100%;height:auto;border-radius:var(--r-sm);display:block;background:var(--code)}
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
-.step{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:.84rem;min-width:0}
-.step b{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.tablewrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.88rem}
-th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
-td input{width:100%;min-width:90px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.step{border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-size:var(--fs-sm);min-width:0}
+.step b{display:block;font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* a table wider than the card scrolls inside it; the soft edge shadows say there is more */
+.tablewrap{overflow-x:auto;
+  background:linear-gradient(to right,var(--panel) 30%,transparent) left/32px 100% no-repeat local,
+    linear-gradient(to left,var(--panel) 30%,transparent) right/32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%,rgb(0 0 0/.16),transparent) left/10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%,rgb(0 0 0/.16),transparent) right/10px 100% no-repeat scroll}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td input{width:100%;min-width:90px;min-height:36px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--fg)}
+td input:hover{border-color:var(--muted)}
 td.q input{min-width:52px;width:64px}
-.tag{font:600 .7rem var(--sans);padding:2px 6px;border-radius:4px;white-space:nowrap}
-.t-same{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
-.t-conflict{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
-.t-provisional{background:color-mix(in srgb,var(--ask) 20%,transparent);color:var(--ask)}
+.tag{display:inline-block;font:600 var(--fs-xs)/1.4 var(--sans);padding:2px 7px;border-radius:4px;white-space:nowrap}
+.t-same{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok-ink)}
+.t-conflict{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.t-provisional{background:color-mix(in srgb,var(--ask) 16%,transparent);color:var(--ask-ink)}
 .t-unresolved{background:color-mix(in srgb,var(--grey) 20%,transparent);color:var(--muted)}
 .mono{font-family:var(--mono);font-size:.8rem}
 .spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
-[hidden]{display:none!important}
 </style>
 </head>
 <body>
 <main>
-  <header class="row" style="justify-content:space-between">
-    <div style="display:grid;gap:6px">
-      <a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>
+  <header class="top">
+    <a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>
+    <div class="title">
       <h1>Glass Pantry Shelf Check</h1>
-      <p class="muted">Photograph one fridge or pantry shelf. A vision model lists what it sees; OpenCV checks the photo and the reading, re-reads small labels up close, and decides whether to file the list, ask you, or ask for a new photo. You confirm before anything is kept.</p>
+      <span id="status" class="chip off">Checking…</span>
     </div>
-    <span id="status" class="chip off">Checking…</span>
+    <p class="tagline">Photograph one fridge or pantry shelf.</p>
+    <p class="muted">A vision model lists what it sees; OpenCV checks the photo and the reading, re-reads small labels up close, and decides whether to file the list, ask you, or ask for a new photo. You confirm before anything is kept.</p>
   </header>
 
   <section class="card">
     <h2>Before you upload</h2>
-    <p>Your photo is sent to this engine on AWS and to Anthropic's Claude model to be read. This page does not store photos; the engine logs only counts and timings. Leave people, documents and anything personal out of the frame.</p>
+    <ul class="facts">
+      <li class="i-cloud">Your photo is sent to this engine on AWS and to Anthropic's Claude model to be read.</li>
+      <li class="i-lock">This page does not store photos; the engine logs only counts and timings.</li>
+      <li class="i-frame">Leave people, documents and anything personal out of the frame.</li>
+    </ul>
     <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send a photo.</span></label>
-    <div class="row">
+    <div class="row actions">
       <label class="btn primary" id="pickLabel" aria-disabled="true">Choose a shelf photo<input type="file" id="pick" accept="image/*" disabled></label>
       <button id="sample" type="button">Show the recorded example</button>
       <span id="busy" class="row muted" hidden><span class="spinner"></span><span id="busyText">Reading the photo, about 40 seconds…</span></span>
@@ -91,14 +166,15 @@ td.q input{min-width:52px;width:64px}
     </div>
     <div id="decision" class="decision"></div>
     <div class="stage"><canvas id="cv"></canvas></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--ok)"></span>shelf edge confirmed by OpenCV</span>
-      <span><span class="sw" style="background:var(--ask)"></span>shelf the photo does not show</span>
-      <span><span class="sw" style="background:#4aa3df"></span>item the model proposed</span>
-      <span><span class="sw" style="background:var(--bad)"></span>close-up re-read disagrees (dashed: the close-up sent)</span>
-      <span><span class="sw" style="background:var(--ok);opacity:.6"></span>re-read agrees</span>
-      <span><span class="sw" style="background:var(--grey)"></span>re-read could not tell</span>
-    </div>
+    <!-- swatches use the drawing's own colours (draw() below): shelf lines as strokes, items as boxes -->
+    <ul class="key fine">
+      <li class="line" style="--c:var(--ok)">shelf edge confirmed by OpenCV</li>
+      <li class="line dashed" style="--c:var(--ask)">shelf the photo does not show</li>
+      <li style="--c:#4aa3df">item the model proposed</li>
+      <li style="--c:var(--bad)">close-up re-read disagrees (dashed: the close-up sent)</li>
+      <li style="--c:var(--ok)">re-read agrees</li>
+      <li style="--c:var(--grey)">re-read could not tell</li>
+    </ul>
     <div class="steps" id="steps"></div>
   </section>
 

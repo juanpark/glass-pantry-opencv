@@ -8,108 +8,190 @@
 <style>
 /* Plan v4 R3: pick the fridge -> trace each compartment over its photo -> fill each shelf, drawer or door bin.
    One column; the fridge drawing is the home screen, every task opens beneath it. */
+/* ---- shared base: identical on home.html, index.html and fridge.html ---- */
 :root{
-  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c;
+  --bg:#f5f6f3; --panel:#fff; --fg:#1b221e; --muted:#5d6862; --line:#d8ded9; --accent:#1f6f5c; --accent-hi:#185a4a; --on-accent:#fff;
   --ok:#2e8b57; --ask:#c77700; --bad:#c0392b; --info:#2f6fb3; --grey:#8a948e; --code:#eef1ee;
-  --cab:#e9ecea; --cold:#e6f1f6; --freezer:#e8ecf7; --door:#f1efe9;
+  --ok-ink:#23704a; --ask-ink:#965900; --info-ink:#2a63a1;  /* status colours as text: 4.5:1 on the panel */
+  --fs-xs:.75rem; --fs-sm:.86rem; --r:8px; --r-sm:6px; --tap:44px;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
   --mono:ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root{
-  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8;
+  --bg:#121715; --panel:#1a201d; --fg:#e3eae5; --muted:#9aa59f; --line:#2b3430; --accent:#6cc4a8; --accent-hi:#86d3ba; --on-accent:#0f1a16;
   --ok:#5fc48c; --ask:#f0a640; --bad:#ef7a6c; --info:#7fb1ea; --grey:#7d8781; --code:#222a26;
-  --cab:#232a27; --cold:#1d2a30; --freezer:#1f2333; --door:#2a2822; color-scheme:dark}}
+  --ok-ink:var(--ok); --ask-ink:var(--ask); --info-ink:var(--info); color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
-  padding:20px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
-main{max-width:980px;margin:0 auto;display:grid;gap:18px}
-h1{font-size:1.5rem;margin:0;letter-spacing:-.01em}
-h2{font-size:1.05rem;margin:0}
+  padding:28px max(16px,env(safe-area-inset-right)) 72px max(16px,env(safe-area-inset-left))}
+main{max-width:980px;margin:0 auto;display:grid;gap:20px}
+h1{font-size:clamp(1.45rem,1.1rem + 1.5vw,1.75rem);line-height:1.2;margin:0;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:1.25rem;line-height:1.3;margin:0;letter-spacing:-.01em}
+.h3{font-size:.95rem}
 p{margin:0;max-width:70ch}
+a{color:var(--accent);text-underline-offset:.18em;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .muted{color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0}
-.card>*{min-width:0}  /* a wide table or a long option never widens the page; it scrolls or wraps inside */
+.fine{font-size:var(--fs-sm)}
+.top{display:grid;gap:8px}
+.top .title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.top .title h1{min-width:0}
+.top .title .chip{flex:none;margin-top:.3em}
+.top>a{justify-self:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:12px;min-width:0}
+.card p,.card ol,.card ul{max-width:none}  /* text fills its card; the 70ch measure is for the open page */
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 var(--fs-xs)/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 9px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.chip:not(:empty)::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.live{color:var(--ok-ink)} .off{color:var(--muted)} .rec{color:var(--info-ink)} .warn{color:var(--ask-ink)}
+button,.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);
+  font:600 .94rem/1.25 var(--sans);text-align:center;text-decoration:none;border-radius:var(--r-sm);padding:10px 16px;
+  border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;transition:background-color .15s,border-color .15s}
+button:not(:disabled):hover,.btn:not([aria-disabled=true]):hover{border-color:var(--muted)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.primary:not(:disabled):hover,.btn.primary:not([aria-disabled=true]):hover{background:var(--accent-hi);border-color:var(--accent-hi)}
+button.small,.btn.small{min-height:36px;padding:6px 12px;font-size:var(--fs-sm)}
+button:disabled,.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed}
+.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+/* a file input stays focusable inside its label, so the upload buttons can be reached with the keyboard */
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+label.consent{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));
+  border-radius:var(--r-sm);background:var(--code);font-weight:600;cursor:pointer}
+.card>label.consent{margin-top:8px}  /* breathing room from the text it confirms */
+label.consent input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+@media (max-width:480px){
+  .card{padding:16px}
+  .actions>button,.actions>.btn{flex:1 1 100%}
+}
+@media (prefers-reduced-motion:reduce){button,.btn{transition:none}}
+/* page header: a big title with the status on the right, a tagline, then the quieter intro */
+.top{gap:10px;padding-bottom:8px}
+.top h1{font-size:clamp(1.9rem,1.3rem + 2.4vw,2.5rem);line-height:1.12;letter-spacing:-.025em}
+.top .title .chip{margin-top:.7em}
+.top .tagline{font-size:clamp(1.1rem,1rem + .5vw,1.28rem);font-weight:600;line-height:1.35;color:var(--fg);margin-bottom:4px}
+.top .muted,.top .pitch{font-size:1.03rem;max-width:62ch}
+@media (max-width:520px){  /* phones: the status sits on its own row above the title, still on the right, so the title keeps the width */
+  .top .title{flex-wrap:wrap-reverse;gap:8px}
+  .top .title h1{flex-basis:100%}
+  .top .title .chip{margin:0 0 0 auto}
+}
+.card h2:not(.h3){font-size:clamp(1.25rem,1.12rem + .55vw,1.45rem)}
+/* facts: one point per row, divided by hairlines, each with an icon (server, this device, the frame, the daily cap) */
+ul.facts{margin:0;padding:0;list-style:none;display:grid}
+ul.facts li{position:relative;padding:14px 0 14px 48px;border-top:1px solid var(--line)}
+ul.facts li:last-child{padding-bottom:2px}
+ul.facts li::before{content:"";position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 13%,transparent)}
+ul.facts li::after{content:"";position:absolute;left:7px;top:19px;width:18px;height:18px;background:var(--accent);
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.i-cloud{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E")}
+.i-device{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='2.5' width='10' height='19' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E")}
+.i-timer{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='14' r='7.5'/%3E%3Cpath d='M12 14l3.5-3.5M9.5 3h5'/%3E%3C/svg%3E")}
+.i-lock{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9.5' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E")}
+.i-frame{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16'/%3E%3Ccircle cx='12' cy='10.5' r='2.5'/%3E%3Cpath d='M8 17c1-1.8 2.4-2.7 4-2.7s3 .9 4 2.7'/%3E%3C/svg%3E")}
+/* key: what each colour in a drawing means; --c is the drawing's own colour. Boxes by default, .line for a stroke */
+.key{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--fg)}
+.key>li{display:inline-flex;align-items:center;gap:8px}
+.key>li::before{content:"";flex:none;width:14px;height:10px;border:2px solid var(--c);border-radius:2px}
+.key>li.dashed::before{border-style:dashed}
+.key>li.line::before{height:0;border-width:3px 0 0;border-radius:0}
+@media (prefers-reduced-motion:reduce){details summary::after{transition:none}}
+/* ---- this page ---- */
+:root{--cab:#e9ecea; --cold:#e6f1f6; --freezer:#e8ecf7; --door:#f1efe9}
+@media (prefers-color-scheme: dark){:root{--cab:#232a27; --cold:#1d2a30; --freezer:#1f2333; --door:#2a2822}}
+.card>*{min-width:0}  /* a wide table or a long option never widens the page; it scrolls or wraps inside */
 .row>*{min-width:0}
-.chip{font:600 .72rem var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
-.live{color:var(--ok)} .off{color:var(--grey)} .warn{color:var(--ask)}
-button,.btn,select{font:600 .92rem var(--sans);border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
-select{font-weight:500;max-width:100%;text-overflow:ellipsis}
-button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button.small{padding:4px 9px;font-size:.8rem}
-button:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
-button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input[type=file]{display:none}
-label.consent{display:flex;gap:8px;align-items:flex-start}
+/* the fridge picker: the browser's arrow is replaced by a drawn chevron with room of its own, in the theme's colours */
+select{appearance:none;-webkit-appearance:none;min-height:var(--tap);font:500 .94rem var(--sans);border-radius:var(--r-sm);
+  padding:9px 40px 9px 12px;border:1px solid var(--line);color:var(--fg);cursor:pointer;max-width:100%;text-overflow:ellipsis;
+  background-color:var(--panel);
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 21px) 52%,calc(100% - 16px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+select:hover{border-color:var(--muted)}
+.danger{border-top:1px solid var(--line);padding-top:12px}
 .say{font-size:1.02rem;font-weight:600;margin:0}
-.key{font-size:.8rem;margin:0}
-.note{padding:10px 12px;border-radius:6px;background:var(--code);font-size:.88rem}
+.key{font-size:var(--fs-sm);margin:0}
+.note{display:grid;gap:6px;padding:12px 14px;border-radius:var(--r-sm);background:var(--code);font-size:.9rem}
 .note.ask{border-left:5px solid var(--ask)} .note.bad{border-left:5px solid var(--bad)} .note.ok{border-left:5px solid var(--ok)}
 svg{display:block;width:100%;height:auto;max-height:70vh;touch-action:manipulation}
 .lvl{cursor:pointer}
 .lvl:hover rect,.lvl:focus rect{stroke:var(--accent);stroke-width:3}
 .stage{position:relative;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
-.stage canvas{width:auto;max-width:100%;height:auto;max-height:78vh;display:block;margin:0 auto;border-radius:6px;background:var(--code)}
-.tablewrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.88rem}
-th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
-td input{width:100%;min-width:90px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.stage canvas{width:auto;max-width:100%;height:auto;max-height:78vh;display:block;margin:0 auto;border-radius:var(--r-sm);background:var(--code)}
+/* a table wider than the card scrolls inside it; the soft edge shadows say there is more */
+.tablewrap{overflow-x:auto;
+  background:linear-gradient(to right,var(--panel) 30%,transparent) left/32px 100% no-repeat local,
+    linear-gradient(to left,var(--panel) 30%,transparent) right/32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%,rgb(0 0 0/.16),transparent) left/10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%,rgb(0 0 0/.16),transparent) right/10px 100% no-repeat scroll}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td input{width:100%;min-width:90px;min-height:36px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--fg)}
+td input:hover{border-color:var(--muted)}
 td.q input{min-width:52px;width:64px}
-.tag{font:600 .7rem var(--sans);padding:2px 6px;border-radius:4px;white-space:nowrap}
-.t-same{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
-.t-conflict{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
-.t-provisional{background:color-mix(in srgb,var(--ask) 20%,transparent);color:var(--ask)}
+.tag{display:inline-block;font:600 var(--fs-xs)/1.4 var(--sans);padding:2px 7px;border-radius:4px;white-space:nowrap}
+.t-same{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok-ink)}
+.t-conflict{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.t-provisional{background:color-mix(in srgb,var(--ask) 16%,transparent);color:var(--ask-ink)}
 .t-unresolved{background:color-mix(in srgb,var(--grey) 20%,transparent);color:var(--muted)}
 .mono{font-family:var(--mono);font-size:.8rem}
 .spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
-ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
-[hidden]{display:none!important}
+ul.items{margin:0;padding-left:1.1rem;display:grid;gap:6px;font-size:.9rem}
 </style>
 </head>
 <body>
 <main>
-  <header class="row" style="justify-content:space-between">
-    <div style="display:grid;gap:6px">
-      <a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>
+  <header class="top">
+    <a href="./" class="muted" style="font-size:.88rem">← Glass Pantry</a>
+    <div class="title">
       <h1>Glass Pantry: your fridge, from photos</h1>
-      <p class="muted">Pick your fridge, trace each compartment over a photo, then photograph each shelf, drawer or door bin to fill it. You place the corners and shelf lines by hand; OpenCV straightens the opening and checks every shelf reading; you confirm everything.</p>
+      <span id="status" class="chip off">Checking…</span>
     </div>
-    <span id="status" class="chip off">Checking…</span>
+    <p class="tagline">Pick your fridge, trace each compartment over a photo, then photograph each shelf, drawer or door bin to fill it.</p>
+    <p class="muted">You place the corners and shelf lines by hand; OpenCV straightens the opening and checks every shelf reading; you confirm everything.</p>
   </header>
 
   <section class="card">
     <h2>Before you start</h2>
-    <p>Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Your photos are not kept on the server. Your fridge, and the last photo of each shelf, are kept in this browser on this device until you forget them, so you can come back and photograph a shelf again. Anyone using this browser can see them. Leave people, documents and anything personal out of the frame.</p>
-    <p class="row"><button id="forget" type="button" class="small">Forget my fridge and photos on this device</button></p>
-    <p id="keepNote" class="note bad" hidden></p>
+    <ul class="facts">
+      <li class="i-cloud">Photos go to this engine on AWS, and shelf and fridge photos also to Anthropic's Claude model, to be read. Your photos are not kept on the server.</li>
+      <li class="i-device">Your fridge, and the last photo of each shelf, are kept in this browser on this device until you forget them, so you can come back and photograph a shelf again. Anyone using this browser can see them.</li>
+      <li class="i-frame">Leave people, documents and anything personal out of the frame.</li>
+    </ul>
     <label class="consent"><input type="checkbox" id="consent"> <span>I understand and want to send photos.</span></label>
-    <p class="muted"><a href="shelf">Or check a single shelf photo</a></p>
+    <p class="fine"><a href="shelf">Or check a single shelf photo</a></p>
+    <div class="row danger"><button id="forget" type="button" class="small">Forget my fridge and photos on this device</button></div>
+    <p id="keepNote" class="note bad" hidden></p>
   </section>
 
   <section class="card">
     <h2>1. Your fridge</h2>
-    <div class="row">
+    <div class="row actions">
       <select id="model" aria-label="Fridge model"></select>
       <button id="useModel" type="button">Use this fridge</button>
     </div>
-    <div class="row">
+    <div class="row actions">
       <label class="btn" id="identifyPickLabel" aria-disabled="true">Find my fridge from a photo<input type="file" id="identifyPick" accept="image/*" disabled></label>
       <span id="identifyBusy" class="row muted" hidden><span class="spinner"></span><span>Reading…</span></span>
     </div>
-    <p class="muted" style="font-size:.82rem">Photograph the model sticker (usually inside, on a side wall) or the whole fridge. The AI reads it; you choose.</p>
+    <p class="muted fine">Photograph the model sticker (usually inside, on a side wall) or the whole fridge. The AI reads it; you choose.</p>
     <div id="identifyNote" class="note" hidden></div>
     <ul class="items" id="identifyList" hidden></ul>
     <div id="modelNote" class="note" hidden></div>
-    <p id="modelSource" class="muted" style="font-size:.82rem"></p>
+    <p id="modelSource" class="muted fine"></p>
   </section>
 
   <section class="card" id="fridgeCard" hidden>
     <div class="row" style="justify-content:space-between">
       <h2>2. Your fridge, as it stands</h2>
-      <span id="saveState" class="muted" role="status" style="font-size:.85rem"></span>
+      <span id="saveState" class="muted fine" role="status"></span>
     </div>
     <p class="muted">Tap a shelf, drawer or door bin to fill it from a photo. Use <b>Trace</b> on a compartment to fit its shelves to your fridge.</p>
     <div id="traceButtons" class="row"></div>
@@ -117,8 +199,8 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
     <div id="view3d" hidden style="height:min(70vh,560px);border:1px solid var(--line);border-radius:8px;overflow:hidden"></div>
     <svg id="fridge" role="group" aria-label="Fridge drawing"></svg>
     <div id="unplacedBox" hidden>
-      <h2 style="font-size:.95rem">Unplaced</h2>
-      <p class="muted" style="font-size:.85rem">Things from a shelf you removed or from a fridge you replaced. Nothing is ever thrown away.</p>
+      <h2 class="h3">Unplaced</h2>
+      <p class="muted fine">Things from a shelf you removed or from a fridge you replaced. Nothing is ever thrown away.</p>
       <ul class="items" id="unplaced"></ul>
       <div id="unplacedNote" class="note" hidden></div>
     </div>
@@ -134,14 +216,14 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <label class="btn primary" id="tracePickLabel" aria-disabled="true">Choose a compartment photo<input type="file" id="tracePick" accept="image/*" disabled></label>
       <span id="traceBusy" class="row muted" hidden><span class="spinner"></span><span>Working…</span></span>
     </div>
-    <p id="traceStep" style="font-weight:600" hidden></p>
+    <p id="traceStep" class="say" hidden></p>
     <div id="traceNote" class="note" hidden></div>
     <div class="stage" id="traceStage" hidden><canvas id="traceCv"></canvas></div>
-    <div class="row" id="outlineActions" hidden>
+    <div class="row actions" id="outlineActions" hidden>
       <button class="primary" id="outlineOk" type="button">Next: match the shelves</button>
       <button id="noCorners" type="button">I can't see all four corners</button>
     </div>
-    <div class="row" id="lineActions" hidden>
+    <div class="row actions" id="lineActions" hidden>
       <button id="addLine" type="button">Add a line</button>
       <button id="delLine" type="button" disabled>Remove the selected line</button>
       <button id="backOutline" type="button">Back to the outline</button>
@@ -160,7 +242,7 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
       <label class="btn" id="rescanPickLabel" hidden>What changed? (experimental)<input type="file" id="rescanPick" accept="image/*"></label>
       <span id="fillBusy" class="row muted" hidden><span class="spinner"></span><span id="fillBusyText">Reading the photo, about 40 seconds…</span></span>
     </div>
-    <div class="row" id="bandActions" hidden>
+    <div class="row actions" id="bandActions" hidden>
       <span class="muted" id="bandHelp" style="flex-basis:100%"></span>
       <button class="primary" id="bandOk" type="button">Read this part</button>
       <button id="bandCancel" type="button">Cancel</button>
@@ -177,24 +259,24 @@ ul.items{margin:0;padding-left:1.1rem;display:grid;gap:2px;font-size:.88rem}
         <thead><tr><th>Keep</th><th>What it looks like</th><th>Label</th><th>Count</th><th>Close-up check</th></tr></thead>
         <tbody id="fillRows"></tbody>
       </table></div>
-      <div class="row"><button class="primary" id="fillOk" type="button">Put these here</button></div>
+      <div class="row actions"><button class="primary" id="fillOk" type="button">Put these here</button></div>
     </div>
     <div id="rescanBox" hidden>
-      <p class="note ask" style="font-size:.85rem"><b>Experimental.</b> OpenCV 5 lines this photo up with the last one
+      <p class="note ask fine"><b>Experimental.</b> OpenCV 5 lines this photo up with the last one
         (ALIKED + LightGlue) and checks each thing on its own. On our six test pairs the annotated removals, arrivals
         and the move were covered; the two unchanged shelves had no false item flags but 2 and 1 false "new" spots,
         and two other pairs had 3 and 4 false flags, over the limit we set, so this stays experimental. Every flag is
         a question: nothing leaves this shelf unless you say so.</p>
       <ul class="items" id="rescanQs"></ul>
       <div id="rescanNewBox" hidden>
-        <h2 style="font-size:.95rem">Read in the marked spots</h2>
-        <p class="muted" style="font-size:.85rem">Tick what is new on this shelf. Things already here are left out.</p>
+        <h2 class="h3">Read in the marked spots</h2>
+        <p class="muted fine">Tick what is new on this shelf. Things already here are left out.</p>
         <div class="tablewrap"><table>
           <thead><tr><th>Keep</th><th>What it looks like</th><th>Label</th><th>Count</th></tr></thead>
           <tbody id="rescanNew"></tbody>
         </table></div>
       </div>
-      <div class="row"><button id="rescanRead" type="button" hidden>Read the marked spots with the AI</button>
+      <div class="row actions"><button id="rescanRead" type="button" hidden>Read the marked spots with the AI</button>
         <button class="primary" id="rescanOk" type="button">Apply</button></div>
     </div>
   </section>
