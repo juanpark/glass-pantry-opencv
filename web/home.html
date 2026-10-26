@@ -60,24 +60,46 @@ button:disabled,.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed}
 input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 label.consent{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));
   border-radius:var(--r-sm);background:var(--code);font-weight:600;cursor:pointer}
+.card>label.consent{margin-top:8px}  /* breathing room from the text it confirms */
 label.consent input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
 @media (max-width:480px){
   .card{padding:16px}
   .actions>button,.actions>.btn{flex:1 1 100%}
 }
 @media (prefers-reduced-motion:reduce){button,.btn{transition:none}}
-/* ---- this page ---- */
-/* the front door's header: a big title, the tagline under it, then the lab note (quiet) and the pitch */
+/* page header: a big title with the status on the right, a tagline, then the quieter intro */
 .top{gap:10px;padding-bottom:8px}
-.top h1{font-size:clamp(2rem,1.35rem + 2.6vw,2.75rem);line-height:1.1;letter-spacing:-.025em}
-.top .title .chip{margin-top:.75em}
-.top .tagline{font-size:clamp(1.12rem,1rem + .5vw,1.3rem);font-weight:600;line-height:1.35;color:var(--fg);margin-bottom:4px}
+.top h1{font-size:clamp(1.9rem,1.3rem + 2.4vw,2.5rem);line-height:1.12;letter-spacing:-.025em}
+.top .title .chip{margin-top:.7em}
+.top .tagline{font-size:clamp(1.1rem,1rem + .5vw,1.28rem);font-weight:600;line-height:1.35;color:var(--fg);margin-bottom:4px}
 .top .muted,.top .pitch{font-size:1.03rem;max-width:62ch}
 @media (max-width:520px){  /* phones: the status sits on its own row above the title, still on the right, so the title keeps the width */
   .top .title{flex-wrap:wrap-reverse;gap:8px}
   .top .title h1{flex-basis:100%}
   .top .title .chip{margin:0 0 0 auto}
 }
+.card h2:not(.h3){font-size:clamp(1.25rem,1.12rem + .55vw,1.45rem)}
+/* facts: one point per row, divided by hairlines, each with an icon (server, this device, the frame, the daily cap) */
+ul.facts{margin:0;padding:0;list-style:none;display:grid}
+ul.facts li{position:relative;padding:14px 0 14px 48px;border-top:1px solid var(--line)}
+ul.facts li:last-child{padding-bottom:2px}
+ul.facts li::before{content:"";position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 13%,transparent)}
+ul.facts li::after{content:"";position:absolute;left:7px;top:19px;width:18px;height:18px;background:var(--accent);
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.i-cloud{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E")}
+.i-device{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='2.5' width='10' height='19' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E")}
+.i-timer{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='14' r='7.5'/%3E%3Cpath d='M12 14l3.5-3.5M9.5 3h5'/%3E%3C/svg%3E")}
+.i-lock{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9.5' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E")}
+.i-frame{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16'/%3E%3Ccircle cx='12' cy='10.5' r='2.5'/%3E%3Cpath d='M8 17c1-1.8 2.4-2.7 4-2.7s3 .9 4 2.7'/%3E%3C/svg%3E")}
+/* key: what each colour in a drawing means; --c is the drawing's own colour. Boxes by default, .line for a stroke */
+.key{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--fg)}
+.key>li{display:inline-flex;align-items:center;gap:8px}
+.key>li::before{content:"";flex:none;width:14px;height:10px;border:2px solid var(--c);border-radius:2px}
+.key>li.dashed::before{border-style:dashed}
+.key>li.line::before{height:0;border-width:3px 0 0;border-radius:0}
+@media (prefers-reduced-motion:reduce){details summary::after{transition:none}}
+/* ---- this page ---- */
 .btn.lg{min-height:48px;padding:12px 22px;font-size:1rem}
 #hero canvas{width:100%;height:auto;display:block;border-radius:var(--r-sm);background:var(--code)}
 /* the looping pair: OpenCV's own sentence leads, what really happened sits in a soft box, the key sits under the picture */
@@ -85,10 +107,6 @@ label.consent input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color
 #hero .say{font-size:clamp(1.05rem,.98rem + .35vw,1.2rem);font-weight:600;line-height:1.45;letter-spacing:-.005em}
 #hero .truth{padding:12px 14px;border-radius:var(--r-sm);background:var(--code);line-height:1.55}
 #hero .caption{display:grid;gap:8px}
-ul.key{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--fg)}
-ul.key li{display:inline-flex;align-items:center;gap:8px}
-ul.key li::before{content:"";flex:none;width:14px;height:10px;border:2px solid var(--c);border-radius:2px}
-ul.key li.dashed::before{border-style:dashed}
 /* How it works: a vertical numbered timeline; the step's bold name becomes its heading */
 ol.steps{margin:0;padding:0;list-style:none;counter-reset:step;display:grid;gap:20px}
 ol.steps li{counter-increment:step;position:relative;padding-left:44px;color:var(--muted)}
@@ -97,7 +115,6 @@ ol.steps li::before{content:counter(step);position:absolute;left:0;top:0;display
 ol.steps li:not(:last-child)::after{content:"";position:absolute;left:14.5px;top:38px;bottom:-14px;width:1px;
   background:color-mix(in srgb,var(--accent) 40%,var(--line))}
 ol.steps li b{display:block;margin:4px 0;color:var(--fg);font-size:1rem;font-weight:600}
-.card>h2{font-size:1.45rem}  /* the front page's sections lead harder than the tool pages' cards */
 ul.res{margin:0;padding-left:1.1rem;display:grid;gap:6px}
 /* What we measured: one result per row, divided by hairlines; the bold lead-in names the result */
 section ul.res{padding:0;list-style:none;gap:0}
@@ -107,8 +124,7 @@ section ul.res li b{color:var(--fg);font-size:1rem;font-weight:600}
 section ul.res+.fine{padding-top:12px;border-top:1px dashed var(--line)}
 .fail{display:inline-block;padding:0 7px;border-radius:99px;font-weight:600;color:var(--bad);
   background:color-mix(in srgb,var(--bad) 13%,transparent)}
-/* Before you try it: the summary reads as the card's heading, with a chevron that turns when open;
-   each point is a row with an icon (server, this device, the daily cap) */
+/* Before you try it: the summary reads as the card's heading, with a chevron that turns when open */
 details summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:var(--tap);
   margin:-6px 0;cursor:pointer;font-size:1.2rem;font-weight:600;letter-spacing:-.01em}
 details summary::-webkit-details-marker{display:none}
@@ -117,17 +133,6 @@ details summary::after{content:"";flex:none;width:9px;height:9px;margin-right:6p
 details[open] summary::after{transform:translateY(2px) rotate(-135deg)}
 details summary:hover::after{border-color:var(--fg)}
 details[open] summary{margin-bottom:6px}
-details ul.res{padding:0;list-style:none;gap:0}
-details ul.res li{position:relative;padding:14px 0 14px 48px;border-top:1px solid var(--line)}
-details ul.res li:last-child{padding-bottom:2px}
-details ul.res li::before{content:"";position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
-  background:color-mix(in srgb,var(--accent) 13%,transparent)}
-details ul.res li::after{content:"";position:absolute;left:7px;top:19px;width:18px;height:18px;background:var(--accent);
-  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
-details ul.res li:nth-child(1){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E")}
-details ul.res li:nth-child(2){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='2.5' width='10' height='19' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E")}
-details ul.res li:nth-child(3){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='14' r='7.5'/%3E%3Cpath d='M12 14l3.5-3.5M9.5 3h5'/%3E%3C/svg%3E")}
-@media (prefers-reduced-motion:reduce){details summary::after{transition:none}}
 footer{font-size:var(--fs-sm);padding-top:16px;border-top:1px solid var(--line)}
 footer p{max-width:none}
 </style>
@@ -196,13 +201,13 @@ footer p{max-width:none}
 
   <details class="card">
     <summary>Before you try it: where your photos go</summary>
-    <ul class="res">
-      <li>Photos are processed by this engine on AWS, in memory, without being intentionally kept; it logs only codes
+    <ul class="facts">
+      <li class="i-cloud">Photos are processed by this engine on AWS, in memory, without being intentionally kept; it logs only codes
         and counts. A photo or crop that Claude reads also goes to Anthropic. Tracing and comparing two photos use AWS
         only. Leave people and personal documents out of the frame.</li>
-      <li>Your fridge and the last photo of each shelf are kept in this browser on this device, never on our server,
+      <li class="i-device">Your fridge and the last photo of each shelf are kept in this browser on this device, never on our server,
         so you can come back later. Anyone using this browser can see them; the fridge page has a button to forget them.</li>
-      <li>Live reading is capped per day for everyone together; the recorded shelf check always works.</li>
+      <li class="i-timer">Live reading is capped per day for everyone together; the recorded shelf check always works.</li>
     </ul>
   </details>
 
