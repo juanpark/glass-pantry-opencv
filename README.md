@@ -1,23 +1,27 @@
 # Glass Pantry Vision Lab (OpenCV AI Competition 2026)
 
-**Using OpenCV to upgrade our fridge app.** A lab for Glass Pantry, the fridge app we are building (an early build, in private testing), not the app itself: we test vision
-here, and what passes goes into the app. Team 8yte, South Korea and Bangladesh.
+**Using OpenCV to upgrade our fridge app.** A lab for the Glass Pantry app, the fridge app we are building (an early build, in private testing). We test vision
+here, and what passes goes into the app. The lab is not the app. Team 8yte, South Korea and Bangladesh.
 
-**Live:** https://4bqaeiqta4gtyej43dpooy7cuq0gybcv.lambda-url.us-east-1.on.aws/ (front page), `fridge` (the full flow), `shelf` (one recorded shelf check), `health`.
+Live: https://4bqaeiqta4gtyej43dpooy7cuq0gybcv.lambda-url.us-east-1.on.aws/ (the front page). Pages: `/` the front
+page, `/fridge` the full flow, `/shelf` one shelf check with a recorded example, `/health`.
 
-A fridge you can open on your phone, kept true by photos. A web prototype of the Glass Pantry workflow: find your
-fridge from its model sticker, trace each compartment over a photo, then photograph each shelf. A vision-language
-model (Claude) lists what it sees. OpenCV 5 gates the photo, checks the model's shelf lines against real edges,
-straightens traced openings, and selects small labels for a re-read from the uploaded image (the browser sends at
-most 3024 px, cut to the shelf the person marks). The engine recommends **file**, **ask** or **retake**; a person
-confirms before anything is kept. The fridge lives in this browser on this device (never on the server), drawn in
-2D and in 3D with the phone app's own item models.
+The lab runs the app's workflow in a browser: pick your fridge from its model sticker, trace each compartment over a
+photo, then photograph each shelf. A vision-language model (Claude) lists what it sees. OpenCV 5 gates the photo,
+checks the model's shelf lines against real edges, straightens traced openings, and picks small labels for a second
+read from the uploaded image (the browser sends at most 3024 px, cut to the shelf band the person marks). The engine
+recommends file, ask or retake; a person confirms before anything is kept. The fridge lives in this browser on this
+device, never on the server, drawn in 2D and in 3D with the app's own item models.
 
-When a shelf is photographed again, **What changed?** (experimental; it failed its pre-set bar, see the report)
-lines the new photo up with the last one using OpenCV 5's learned matching (ALIKED + LightGlue) and marks only what
-may have changed for a second look.
+When a shelf is photographed again, *What changed?* (experimental; it failed its pre-set bar, see the report) lines
+the new photo up with the last one using OpenCV 5's learned matching (ALIKED + LightGlue) and marks only what may
+have changed for a second look.
 
-Pages: `/` the front page, `/fridge` the fridge, `/shelf` a single-shelf check with a recorded example.
+Measured 10/26 against the alternatives, on 12 pairings of 12 photos from one kitchen with the plan frozen first: one
+Claude call given both photos and the old list found every change and wrongly flagged 2 to 3 of 148 unchanged things,
+at about a third of the cost and time of our two-step flow (OpenCV, then close-up reads), so that call becomes step two.
+Among free matchers the learned one is the only usable first pass: it cleared 82 of 148 unchanged things; without
+LightGlue, 29; SIFT 33; ORB 20. See the report, §6.
 
 ![Architecture](docs/architecture/architecture.png)
 
@@ -40,17 +44,17 @@ uv run python tools/serve_local.py --live                   # the web page on ht
 ## Deploy (AWS)
 
 `.github/workflows/deploy.yml` tests, builds the Lambda container (x86_64) with SAM, and deploys the stack
-`glass-pantry-opencv` in us-east-1 on pushes to `main` that change code (documentation-only pushes do not deploy)
-or on manual dispatch. It signs in with GitHub OIDC (no stored keys) to a
-role meant for this stack's own resources, then smoke-tests the endpoint and runs four probes that the role is
-refused elsewhere. The owner creates the execution role, the log group, the ECR repository, the upload bucket and the
-call-counter table once (`template.yaml` names them), and an EventBridge rule that invokes the function every
-5 minutes as a keep-warm ping (the handler then loads the OpenCV 5 matching models and runs them once on a made-up image; no admission, no
-model call).
+`glass-pantry-opencv` in us-east-1. It runs on pushes to `main` that change code (documentation-only pushes do not
+deploy) or on manual dispatch. It signs in with GitHub OIDC (no stored keys) to a role meant for this stack's own
+resources, then smoke-tests the endpoint and runs four probes that the role is refused elsewhere. The owner creates
+the execution role, the log group, the ECR repository, the upload bucket and the call-counter table once
+(`template.yaml` names them), and an EventBridge Scheduler schedule that invokes the function every 5 minutes as a
+keep-warm ping (the handler then loads the OpenCV 5 matching models and runs them once on a made-up image; no
+admission, no model call).
 
-Guards on the live endpoint (all server-side): an owner on/off switch in Parameter Store, a shared daily scan cap
-(atomic DynamoDB counter, fails closed), upload size and pixel limits, a time budget for every model call, and
-logs that hold codes and counts only.
+Guards on the live endpoint, all server-side: an owner on/off switch in Parameter Store, a shared daily scan cap
+(atomic DynamoDB counter, fails closed), upload size and pixel limits, a time budget for every model call, and logs
+that hold codes and counts only.
 
 ## Code
 
@@ -60,8 +64,8 @@ logs that hold codes and counts only.
 | `verifier/gate.py` | photo gate: blur, shake, dark, blown-out (no model call on a bad photo) |
 | `verifier/prompt.py` | the Glass Pantry app's scan prompt, frozen with a hash |
 | `verifier/claude.py` | Messages API calls, answer parsing and validation, the label judge |
-| `verifier/planes.py` | shelf lines from the model checked against real horizontal edges (Canny + probabilistic Hough) |
-| `verifier/zoom.py` | the zoom pass: OpenCV selects, crops from the original, the model re-reads, the result is reconciled |
+| `verifier/planes.py` | shelf check: shelf lines from the model tested against real horizontal edges (Canny + probabilistic Hough) |
+| `verifier/zoom.py` | the zoom pass: OpenCV's close-up picker chooses, crops from the original, the model re-reads, the result is reconciled |
 | `verifier/decide.py` | evidence → file / ask / retake |
 | `verifier/scan.py` | one photo through the loop, with a timed trace of every step |
 | `verifier/change.py`, `verifier/rescan.py` | What changed? (experimental): OpenCV 5 ALIKED + LightGlue alignment, per-item outcomes, new regions, `POST /rescan` |
@@ -71,9 +75,10 @@ logs that hold codes and counts only.
 | `web/fridge.html`, `web/twin.js` | the fridge page: pick, trace, fill; the browser twin and its rules |
 | `web/scene.js`, `web/twin3d.js` | the 3D view (pure geometry and library matching; three.js drawing, the change played on the shelf) |
 | `web/compare.js` | What changed? drawn: the two photos, OpenCV's matched pairs, the outcome boxes |
-| `web/items/`, `tools/export_items.py` | the phone app's 52 item models and match words, exported for the 3D view |
+| `web/items/`, `tools/export_items.py` | the app's 52 item models and match words, exported for the 3D view |
 | `web/home.html` | the front page (`/`): the idea, the steps, the measured results |
 | `web/index.html` | the single-shelf check (`/shelf`): upload, overlays, the list to confirm |
 | `tools/` | local runs, annotation of results, the evaluation diagnostic |
 
-Docs: [architecture](docs/architecture/), [technical report](docs/report.md), [where the code came from](docs/provenance.md).
+Docs: [technical report](docs/report.md), [pipeline](docs/pipeline.md), [architecture](docs/architecture/),
+[where the code came from](docs/provenance.md).
