@@ -73,4 +73,4 @@ def test_the_front_page_keeps_its_caveats():
     assert "that setup was not part of the test" in body and "one recorded pair (spot checks)" in body and "(best effort)" in body
     assert "those 2, and 4 false alarms" in body  # the looping pair says which flags were real, above the picture
     # 10/26 comparison: the page states the shipped-code numbers and the both-photos result, and no call-saving claim
-    assert "51 of 71" in body and "becomes step two" in body and "needed no AI read" not in body
+    assert "51 of 71" in body and "planned as step two" in body and "needed no AI read" not in body

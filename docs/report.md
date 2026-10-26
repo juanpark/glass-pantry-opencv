@@ -313,21 +313,23 @@ pairs, align ≥ 5 of 7 (the plan expected 7 pairs; the rounds had 5 and 6); fla
 - **Trade-off, now measured:** the learned matcher is about 10× slower than SIFT on this Mac (2.0–3.2 s vs 0.2 s per
   pair). We kept it because on these pairs it marked 29 more things as unchanged (56 vs 27 of 71) and asked 35 fewer
   needless questions (15 vs 50). We had reasoned that a few extra seconds of matching would pay for themselves if
-  they saved one re-read per rescan. On 10/26 we measured it (next block), and they did not: our two-step flow
-  (OpenCV, then close-up reads) cost about $0.090 and 15.7 s a pair, against $0.030 and 4.7 s for one model call given
-  both photos, and the first pass left nothing to read on 0 of 12 pairs.
+  they saved one re-read per rescan. On 10/26 we measured the parts (next block): every pair still left questions or
+  needed a full read, and the measured stages of our two-step flow (OpenCV, then close-up reads) cost about $0.090 and
+  15.7 s a pair, against $0.030 and 4.7 s for one model call given both photos.
 - **Not measured:** both rounds compared whole photos; the page now compares the shelf band only, and that
   configuration has not been evaluated. Per the frozen plan the feature stays experimental.
 
 **What changed? against the alternatives (10/26).** The question: does OpenCV 5's learned matcher earn its place, against
 OpenCV's classic matchers and against the model alone? Plan, code, prompts and answer key were frozen and hashed before
-any paid run; three runs of every model method; each method's numbers are the median of the three run totals.
+any paid run; three runs of every model method; each method's numbers are the median of the three run totals. This
+is retrospective evidence: the photos had been seen before (see the caveats).
 Reviewed by Codex (plan, code in four rounds, numbers) and a second reviewer (plan, results).
 
 Methods: **L** the learned matcher with the per-item rules (what the page runs); **NN** the same ALIKED points matched by
 nearest neighbour instead of LightGlue; **SIFT** and **ORB** with the same rules; **R** a full model re-read of the new
-photo, then a name-only diff with the old list (the app's way today); **B** one model call given both photos and the old
-list; **L+** the page's two-step flow, L then up to 6 close-up reads (cost and time only).
+photo, then our experimental name-only diff with the old list (exhaustive Haiku comparisons; not a benchmark of the
+app); **B** one model call given both photos and the old list; **L+** the page's two-step flow, L then up to 6 close-up
+reads (cost and time of its stages only; its final answers were not scored).
 
 Pairs: set A is round 2's 6 pairs; set C re-pairs the same afternoon's photos into 6 pairings no method had run on
 (answer key confirmed by the owner before any run); together 12 pairings of 12 photos from one kitchen, 148 listed
@@ -338,39 +340,41 @@ apart and agrees.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | B: model, both photos + old list | 5/5 | 2/2 | 5/5 | 2–3 / 25–26 | 3 | 0 | 4.7 (incl. API) | 0.030 |
 | L: ALIKED + LightGlue + rules | 5/5 | 2/2 | 0/5 credited (3/5 covered by its changed boxes) | 31 / 35 | 10 | 1 | 2.2 Mac, 4.4 Lambda | 0 |
-| L+: L, then close-up reads | as L | as L | as L | as L | as L | 1 fallback per run | 15.7 | 0.090 |
+| L+: L, then close-up reads | not scored | not scored | not scored | not scored | not scored | C3: full read, not measured | 15.7 (stages) | 0.090 (stages) |
 | NN: ALIKED, no LightGlue | 4/5 | 1/2 | 0/5 | 45 / 74 | 10 | 5 | 1.6 | 0 |
 | SIFT + rules | 4/5 | 2/2 | 0/5 | 88 / 27 | 27 | 1 | 0.18 | 0 |
 | ORB + rules | 5/5 | 2/2 | 0/5 | 117 / 11 | 20 | 0 | 0.12 | 0 |
-| R: full re-read + name diff | 5/5 | not supported | 5/5 | 63–64 / 0 | 25–36 per 6 pairs | 0 | 29.8 (20 read + 11 our matching) | ≥ 0.075 |
+| R: full re-read + name diff | 5/5 | not supported | 5/5 | 63–64 / 0 | 24–36 per 6 pairs | 0 | 29.8 (19.6 read + 10.3 our matching) | ≥ 0.075 |
 
 Reading it:
-- **The model given both photos did the per-item job better** on every scored count, and at about a third of the cost
-  and time of our two-step flow. It almost never wrongly flagged an unchanged thing; its questions were "I cannot
-  see it", mostly on the re-framed pairs. B asked fewer questions than L on 9 of 12 pairs, tied on 2, and L on 1.
+- **The model given both photos matched L's first pass on removals and moves, got the additions credited, and asked
+  about far fewer unchanged things:** 27–29 of 148 (2–3 change flags, 25–26 "cannot compare", mostly on the re-framed
+  pairs) against L's 66. B asked fewer questions than L on 9 of 12 pairs, tied on 2, and L on 1. It cost about a third
+  of the measured L+ stages, in about a third of the time.
 - **OpenCV as second guesser lost.** On the things B left open, L cleared 1 per set; L never cleared a changed thing
-  (also true of B). The first pass never left a shelf with nothing to read (0 of 12), so L+ always called the model: on the three
-  unchanged pairs $0.038, $0.066 and $0.099, against B's $0.023, $0.030 and $0.032. B's cost is mostly the two images, so
-  sending it fewer items would save almost nothing.
+  (also true of B). Every pair left questions or needed a full read: on 11 of 12 L+ made close-up reads, and C3 went to a
+  full read whose cost was not measured. On the three unchanged pairs L+'s stages cost $0.038, $0.067 and $0.099,
+  against B's $0.023, $0.030 and $0.032.
 - **OpenCV as referee held.** L refused one alignment it could not trust (C3, inlier ratio 0.223 under the 0.25 bar)
-  and that pair went to a full read instead of a wrong answer. Among free matchers L is the only usable one: it cleared
-  82 of 148 unchanged instances; NN (same points, no LightGlue) cleared 29 and could not align 5 of 6 re-paired pairs;
-  SIFT 33 and ORB 20, through rules tuned on L's matches. LightGlue is what makes a free first pass work here.
-- **What we change:** step two of *What changed?* becomes one model call given both photos instead of close-up reads.
-  The OpenCV pass stays as the free first answer the page draws (matched points, per-item boxes, refusals); whether it
-  still saves a call in that flow will be measured again.
+  and that pair went to a full read instead of a wrong answer. Among the model-free passes, L cleared the most
+  unchanged instances under these shared rules: 82 of 148; NN (same points, no LightGlue) cleared 29 and could not
+  align 5 of 6 re-paired pairs; SIFT 33 and ORB 20, through rules tuned on L's matches. ORB aligned all 12 pairs, L 11.
+- **What we plan to change:** step two of *What changed?* becomes one model call given both photos instead of close-up
+  reads (the page still runs close-up reads). The OpenCV pass stays as the model-free first answer the page draws
+  (matched points, per-item boxes, refusals); whether it still saves a call in that flow has not been evaluated.
 - High effort for B on set A (one run): the same finds, 3 questions, more cost and time; no gain.
 
-Caveats: set C shares photos with set A, and the 12 scored changes are six physical events (one coffee placement is
-the same after photo three times, the moved tub twice). The per-item rules were set with L's matches; SIFT, ORB and NN
+Caveats: the comparison is retrospective: set A's photos and results were known, and set C re-pairs those photos;
+only the protocol and the runs were new and frozen first. Several physical changes are scored more than once (one
+coffee placement is the same after photo three times; the pack removal and tub move appear twice). The per-item rules were set with L's matches; SIFT, ORB and NN
 use them untouched, so their question counts are matcher plus rules. Additions are credited only from "new" boxes;
 L's changed boxes covered 3 of 5 additions (a diagnostic, not a credit). B is told the task in the scorer's own terms
 and, on the two pairs with a shelf exit, which strip is not the shelf. R's one "unsafe clear" per set is the moved tub,
-which a name-only diff cannot see; its time is about 20 s of re-reading plus 11 s of our exhaustive matching step, not
-the app's. Times per pair are run totals divided by 12. L/NN/SIFT/ORB: warm on an M1 Mac (L's total includes C3's refused
+which a name-only diff cannot see; its time is about 19.6 s of re-reading plus 10.3 s of our exhaustive matching step,
+not the app's. Times per pair are run totals divided by 12. L/NN/SIFT/ORB: warm on an M1 Mac (L's total includes C3's refused
 alignment, 6.6 s); B, R and L+ include the API round trip; L on Lambda is 4.4 s warm
-(spot check), the same order as B. Costs are model list-price estimates ($9.83 for all runs). L+ hit one fallback full
-read per run on C3 whose cost was not measured. The frozen plan, raw outputs and reviews are in our working notes, not in
+(spot check), the same order as B. Costs are model list-price estimates ($9.83 for all runs); the AWS compute for the
+OpenCV passes was not measured. The frozen plan, raw outputs and reviews are in our working notes, not in
 this repository.
 
 **Failures we saw and what we did:**
@@ -429,4 +433,4 @@ this repository.
 | Recorded example on the page | Replay of one real run, labelled RECORDED |
 | Glass Pantry app footage in the video | The app we are building (an early build, run in the iOS simulator with made-up demo data). The OpenCV loop is not in the app |
 | Fridge from a sticker photo, two-step outline editor, 3D view | On the web page only, not in the phone app (the app has its own 3D renderer) |
-| What changed? | On the page, labelled experimental; failed its pre-set bar (§6). One model call given both photos did better in the 10/26 comparison (§6); the page still runs the two-step flow. Not in the phone app |
+| What changed? | On the page, labelled experimental; failed its pre-set bar (§6). In the 10/26 comparison one model call given both photos asked about far fewer unchanged things than its first pass, for less than its measured close-up stages (§6); that call is planned as step two; the page still runs the two-step flow. Not in the phone app |

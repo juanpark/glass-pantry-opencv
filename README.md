@@ -17,11 +17,12 @@ When a shelf is photographed again, *What changed?* (experimental; it failed its
 the new photo up with the last one using OpenCV 5's learned matching (ALIKED + LightGlue) and marks only what may
 have changed for a second look.
 
-Measured 10/26 against the alternatives, on 12 pairings of 12 photos from one kitchen with the plan frozen first: one
-Claude call given both photos and the old list found every change and wrongly flagged 2 to 3 of 148 unchanged things,
-at about a third of the cost and time of our two-step flow (OpenCV, then close-up reads), so that call becomes step two.
-Among free matchers the learned one is the only usable first pass: it cleared 82 of 148 unchanged things; without
-LightGlue, 29; SIFT 33; ORB 20. See the report, §6.
+Measured 10/26 against the alternatives, on 12 pairings of 12 photos from one kitchen already used in development (a
+retrospective comparison, protocol frozen first): one Claude call given both photos and the old list was credited with
+every change and asked about 27 to 29 of 148 unchanged things (OpenCV's first pass: 66), for about a third of the cost
+and time of our measured OpenCV-then-close-up stages; it is planned as step two. Among the model-free passes, the
+learned matcher cleared the most unchanged things under shared rules: 82 of 148; without LightGlue, 29; SIFT 33;
+ORB 20. See the report, §6.
 
 ![Architecture](docs/architecture/architecture.png)
 

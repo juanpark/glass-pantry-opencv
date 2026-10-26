@@ -80,8 +80,8 @@ footer{font-size:.84rem}
       <li><b>Photograph it again later.</b> OpenCV lines the new photo up with the last one and checks each thing, with no
         AI. It marks possible changes and new spots; you may ask Claude to read just those. Things OpenCV finds only
         moved keep their reading. Nothing leaves the shelf unless you say so, and then it moves to Unplaced, never deleted.
-        (Measured 10/26: one Claude call given both photos did better than those close-up reads, at about a third of the
-        cost. That becomes step two.)</li>
+        (Measured 10/26: one Claude call given both photos asked about far fewer unchanged things, for about a third of
+        the cost of those close-up reads, so it is planned as step two.)</li>
     </ol>
   </section>
 
@@ -92,12 +92,13 @@ footer{font-size:.84rem}
         <span class="fail">failed</span> its bar on false alarms (8 unchanged things asked about; classic SIFT: 38). So it
         is marked experimental. 56 of 71 things were marked no visible change (SIFT: 27); with the code as shipped, 51 of 71,
         and 8 false new spots instead of 7. The page compares one shelf strip; that setup was not part of the test.</li>
-      <li><b>Against the AI alone</b> (10/26, 12 pairings of 12 photos from one kitchen, plan frozen first): one Claude
-        call given both photos and the old list found every removal (5), move (2) and addition (5) in all three runs and
-        wrongly flagged 2 to 3 of 148 unchanged things, for about $0.03 and 4.7 s a pair. Our two-step rescan (OpenCV,
-        then close-up reads) took about $0.09 and 16 s a pair, so that single call becomes step two. OpenCV 5's learned
-        matcher stays as the free first pass, the only one that held up: it cleared 82 of 148 unchanged things; the same
-        ALIKED points without LightGlue cleared 29 and could not line up 5 of 6 re-paired photos; SIFT 33, ORB 20.</li>
+      <li><b>Against the AI alone</b> (10/26, 12 pairings of 12 photos from one kitchen we had used before, protocol
+        frozen first): one Claude call given both photos and the old list was credited with every removal (5), move (2)
+        and addition (5) in all three runs and asked about 27 to 29 of 148 unchanged things (OpenCV's first pass: 66), for
+        about $0.03 and 4.7 s a pair. Our measured OpenCV-then-close-up stages took about $0.09 and 16 s a pair, so that
+        single call is planned as step two. Among the passes with no AI call, OpenCV 5's learned matcher cleared the most
+        unchanged things under shared rules: 82 of 148; the same ALIKED points without LightGlue cleared 29 and could not
+        line up 5 of 6 re-paired photos; SIFT 33, ORB 20.</li>
       <li><b>Second looks at small labels:</b> no wrong first reading to catch in 28; no accuracy gain claimed.</li>
       <li><b>Speed on AWS</b>, OpenCV comparing one recorded pair (spot checks): one pair took 4.4 s, and 9.0 s on its first call. After we added a ping every 5 minutes to keep it warm (best effort), another pair took 5.1 s on its first call, then 4.8 s.</li>
     </ul>
