@@ -18,7 +18,7 @@ pre-set bar).
 
 Rules the page keeps (`web/fridge.html`):
 
-- **Suggestions are judged before they ship.** On the held-out test photos (hand truth, `tools/eval_trace.py`) the
+- **Suggestions are judged before they ship.** On fresh test photos, not used during development (hand truth, `tools/eval_trace.py`) the
   corner suggestion was never within 3% of the true corners (0/3; worst corner 12-19% of the diagonal off), and the
   snap targets found 93% of real edges but added 3-15 false ones per photo. Both are switched off; the person places
   corners and lines by hand.

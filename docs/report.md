@@ -3,9 +3,9 @@
 The lab is where we test OpenCV before it goes into the Glass Pantry app, the fridge app we are building (an early
 build, in private testing). The lab is not the app.
 
-> Development observations and held-out results are kept apart below. The held-out zoom results were measured with
-> count re-reads on; the current label-only configuration has not been evaluated on a fresh held-out set. Numbers
-> marked [dev] come from photos used during development; they show behaviour, not accuracy.
+> Development observations and results on fresh test photos (not used during development) are kept apart below. The
+> fresh-photo zoom results were measured with count re-reads on; the current label-only configuration has not been
+> evaluated on a new fresh set. Numbers marked [dev] come from photos used during development; they show behaviour, not accuracy.
 
 ## 1. Problem
 People forget what is in their fridge. Typing an inventory is tedious, so a phone photo is the natural input. A
@@ -262,7 +262,7 @@ alarms (from a cut-off judge reply, fixed since) and one unclear. These judgemen
 truth. Twenty-three close-up label readings agreed with the first reading.
 
 **[test] results** (6 new shelf photos from 3 spaces, before/after one change each, 2 runs per photo = 12 scans).
-Measured with count re-reads on; the label-only configuration has not been measured on held-out photos.
+Measured with count re-reads on; the label-only configuration has not been measured on fresh test photos.
 - **Labels:** among the 28 scored label-reading instances (repeated photos, so not 28 independent products), no first
   reading was wrong, so the zoom pass had nothing to catch on this set. It raised 2 false label alarms (2 of 28). This
   set cannot establish error-detection recall or an accuracy improvement. Not measured: items the model never listed,
