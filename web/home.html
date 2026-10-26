@@ -67,10 +67,28 @@ label.consent input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color
 }
 @media (prefers-reduced-motion:reduce){button,.btn{transition:none}}
 /* ---- this page ---- */
-.lead{font-size:1.1rem}
+/* the front door's header: a big title, the tagline under it, then the lab note (quiet) and the pitch */
+.top{gap:10px;padding-bottom:8px}
+.top h1{font-size:clamp(2rem,1.35rem + 2.6vw,2.75rem);line-height:1.1;letter-spacing:-.025em}
+.top .title .chip{margin-top:.75em}
+.top .tagline{font-size:clamp(1.12rem,1rem + .5vw,1.3rem);font-weight:600;line-height:1.35;color:var(--fg);margin-bottom:4px}
+.top .muted,.top .pitch{font-size:1.03rem;max-width:62ch}
+@media (max-width:520px){  /* phones: the status sits on its own row above the title, still on the right, so the title keeps the width */
+  .top .title{flex-wrap:wrap-reverse;gap:8px}
+  .top .title h1{flex-basis:100%}
+  .top .title .chip{margin:0 0 0 auto}
+}
 .btn.lg{min-height:48px;padding:12px 22px;font-size:1rem}
 #hero canvas{width:100%;height:auto;display:block;border-radius:var(--r-sm);background:var(--code)}
-.say{font-weight:600}
+/* the looping pair: OpenCV's own sentence leads, what really happened sits in a soft box, the key sits under the picture */
+#hero{gap:14px}
+#hero .say{font-size:clamp(1.05rem,.98rem + .35vw,1.2rem);font-weight:600;line-height:1.45;letter-spacing:-.005em}
+#hero .truth{padding:12px 14px;border-radius:var(--r-sm);background:var(--code);line-height:1.55}
+#hero .caption{display:grid;gap:8px}
+ul.key{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--fg)}
+ul.key li{display:inline-flex;align-items:center;gap:8px}
+ul.key li::before{content:"";flex:none;width:14px;height:10px;border:2px solid var(--c);border-radius:2px}
+ul.key li.dashed::before{border-style:dashed}
 /* How it works: a vertical numbered timeline; the step's bold name becomes its heading */
 ol.steps{margin:0;padding:0;list-style:none;counter-reset:step;display:grid;gap:20px}
 ol.steps li{counter-increment:step;position:relative;padding-left:44px;color:var(--muted)}
@@ -89,9 +107,29 @@ section ul.res li b{color:var(--fg);font-size:1rem;font-weight:600}
 section ul.res+.fine{padding-top:12px;border-top:1px dashed var(--line)}
 .fail{display:inline-block;padding:0 7px;border-radius:99px;font-weight:600;color:var(--bad);
   background:color-mix(in srgb,var(--bad) 13%,transparent)}
-details summary{cursor:pointer;font-weight:600}
-details[open] summary{margin-bottom:8px}
-footer{font-size:var(--fs-sm)}
+/* Before you try it: the summary reads as the card's heading, with a chevron that turns when open;
+   each point is a row with an icon (server, this device, the daily cap) */
+details summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:var(--tap);
+  margin:-6px 0;cursor:pointer;font-size:1.2rem;font-weight:600;letter-spacing:-.01em}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"";flex:none;width:9px;height:9px;margin-right:6px;border-right:2px solid var(--muted);
+  border-bottom:2px solid var(--muted);transform:translateY(-3px) rotate(45deg);transition:transform .2s}
+details[open] summary::after{transform:translateY(2px) rotate(-135deg)}
+details summary:hover::after{border-color:var(--fg)}
+details[open] summary{margin-bottom:6px}
+details ul.res{padding:0;list-style:none;gap:0}
+details ul.res li{position:relative;padding:14px 0 14px 48px;border-top:1px solid var(--line)}
+details ul.res li:last-child{padding-bottom:2px}
+details ul.res li::before{content:"";position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 13%,transparent)}
+details ul.res li::after{content:"";position:absolute;left:7px;top:19px;width:18px;height:18px;background:var(--accent);
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+details ul.res li:nth-child(1){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E")}
+details ul.res li:nth-child(2){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='2.5' width='10' height='19' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E")}
+details ul.res li:nth-child(3){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='14' r='7.5'/%3E%3Cpath d='M12 14l3.5-3.5M9.5 3h5'/%3E%3C/svg%3E")}
+@media (prefers-reduced-motion:reduce){details summary::after{transition:none}}
+footer{font-size:var(--fs-sm);padding-top:16px;border-top:1px solid var(--line)}
+footer p{max-width:none}
 </style>
 </head>
 <body>
@@ -101,20 +139,28 @@ footer{font-size:var(--fs-sm)}
       <h1>Glass Pantry Vision Lab</h1>
       <span id="status" class="chip off">Checking…</span>
     </div>
-    <p class="lead"><b>Using OpenCV to upgrade our fridge app.</b> This is a lab for Glass Pantry, the fridge app we are building
+    <p class="tagline">Using OpenCV to upgrade our fridge app.</p>
+    <p class="muted">This is a lab for Glass Pantry, the fridge app we are building
       (an early build, in private testing), not the app itself: we test vision here, and what passes goes into the app.</p>
-    <p class="lead">Photograph a shelf again, and OpenCV&nbsp;5 shows what may have changed before any AI is asked.
+    <p class="pitch">Photograph a shelf again, and OpenCV&nbsp;5 shows what may have changed before any AI is asked.
       Your fridge stays true on your phone, and the AI is asked only about the spots OpenCV marks.</p>
   </header>
 
   <section class="card" id="hero" hidden>
     <p class="say" id="heroSay"></p>
-    <p>Between these two photos one pack was taken out and one tub moved. OpenCV flagged 6 things as possibly
+    <p class="truth">Between these two photos one pack was taken out and one tub moved. OpenCV flagged 6 things as possibly
       changed: those 2, and 4 false alarms, each only a question to you. 7 of the 14 needed no AI read.</p>
     <canvas id="heroCv" aria-label="The last photo of a shelf above a new one, with lines joining the points OpenCV found in both"></canvas>
-    <p class="muted fine">A real pair from our fridge, run through this engine (whole photos). Each line joins a point
-      OpenCV&nbsp;5 found in both photos (ALIKED + LightGlue). Green: still there. Amber: not seen where it was, so you are
-      asked. Blue dashed: looks new.</p>
+    <div class="caption">
+      <p class="muted fine">A real pair from our fridge, run through this engine (whole photos). Each line joins a point
+        OpenCV&nbsp;5 found in both photos (ALIKED + LightGlue).</p>
+      <!-- swatches use compare.js's own colours (COLOUR, NEW), so the key matches the drawing -->
+      <ul class="key fine">
+        <li style="--c:#2e8b57">Green: still there.</li>
+        <li style="--c:#d98200">Amber: not seen where it was, so you are asked.</li>
+        <li style="--c:#2f6fb3" class="dashed">Blue dashed: looks new.</li>
+      </ul>
+    </div>
   </section>
 
   <div class="row actions">
