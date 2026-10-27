@@ -1,4 +1,4 @@
-# Glass Pantry Vision Lab: technical report (2026-10-25; §6 comparison added 10/27)
+# Glass Pantry Vision Lab: technical report (2026-10-27)
 
 The lab is where we test OpenCV before it goes into the Glass Pantry app, the fridge app we are building (an early
 build, in private testing). The lab is not the app.
@@ -270,7 +270,7 @@ Measured with count re-reads on; the label-only configuration has not been measu
 - **Counts:** 5 count re-reads, 5 false alarms: four on an egg tray (first reading 30 eggs, close-up "1" tray) and
   one 1000 → 1; the owner chose the first reading every time. Count re-reads are now off; label re-reads stay.
 - **Model-price estimate and time per scan, count-enabled configuration:** $0.065 → $0.080 with the zoom stage
-  (+23%). The diagnostic's upper-middle runtimes (the 7th sorted value of 12) were 19.5 s without the zoom-stage
+  (+$0.015). The diagnostic's upper-middle runtimes (the 7th sorted value of 12) were 19.5 s without the zoom-stage
   suffix and 23.9 s with it: same-run summaries, not conventional medians or an independently timed comparison.
 - **Step 3 suggestions** (5 compartment photos: 3 with the whole opening visible, 2 deliberately not): the corner
   suggestion was within 3% of the true corners on 0 of 3 (worst corner 12-19% of the diagonal off) and was offered
@@ -374,8 +374,8 @@ which a name-only diff cannot see; its time is about 19.6 s of re-reading plus 1
 not the app's. Times per pair are run totals divided by 12. L/NN/SIFT/ORB: warm on an M1 Mac (L's total includes C3's refused
 alignment, 6.6 s); B, R and L+ include the API round trip; L on Lambda is 4.4 s warm
 (spot check), the same order as B. Costs are model list-price estimates ($9.83 for all runs); the AWS compute for the
-OpenCV passes was not measured. The frozen plan, raw outputs and reviews are in our working notes, not in
-this repository.
+OpenCV passes was not measured. The frozen plan, the comparison harness and its scorer (the B, R, NN and ORB runs), raw outputs and reviews are in
+our working notes, not in this repository.
 
 **Failures we saw and what we did:**
 

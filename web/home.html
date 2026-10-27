@@ -148,7 +148,7 @@ footer p{max-width:none}
     <p class="muted">This is a lab for Glass Pantry, the fridge app we are building
       (an early build, in private testing), not the app itself: we test vision here, and what passes goes into the app.</p>
     <p class="pitch">Photograph a shelf again, and OpenCV&nbsp;5 shows what may have changed before any AI is asked.
-      Your fridge stays true on your phone, and the AI is asked only about the spots OpenCV marks.</p>
+      Every flag is a question: you confirm, and nothing is deleted.</p>
   </header>
 
   <section class="card" id="hero" hidden>
@@ -192,7 +192,7 @@ footer p{max-width:none}
     <h2>What we measured</h2>
     <ul class="res">
       <li><b>Photograph it again</b>, 6 before/after pairs: every removal, the move and the addition were found, but it
-        <span class="fail">failed</span> its bar on false alarms (8 unchanged things asked about; classic SIFT: 38). So it
+        <span class="fail">failed</span> its bar on false alarms (8 false item flags; classic SIFT: 38). So it
         is marked experimental. 56 of 71 things were marked no visible change (SIFT: 27); with the code as shipped, 51 of 71,
         and 8 false new spots instead of 7. The page compares one shelf strip; that setup was not part of the test.</li>
       <li><b>Against the AI alone</b> (10/26, 12 pairings of 12 photos from one kitchen we had used before, protocol
