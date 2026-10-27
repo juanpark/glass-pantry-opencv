@@ -26,8 +26,8 @@ claim identical results. The lab is a prototype: user benefit and usability have
 ## 3. What it does
 The page follows the app's steps (docs/pipeline.md): pick the fridge, trace each compartment over a photo, fill each
 level (a shelf, drawer or door bin) from its own photo. A person confirms every layout and every list. The fridge,
-and the last photo of each shelf, stay in this browser on this device (local storage), never on the server; we call
-this stored fridge the twin. One tab writes at a time (Web Locks; another tab opens read-only), and a Forget button
+and the last confirmed photo of each shelf, are kept in this browser (local storage); the server keeps an uploaded
+photo in memory for the request only, and sends it to Anthropic when it is read. We call this stored fridge the twin. One tab writes at a time (Web Locks; another tab opens read-only), and a Forget button
 removes both; a browser without Web Locks keeps the fridge in that tab only. The lab supports catalogue appliances;
 cupboards, pantries and nested containers are future work.
 
